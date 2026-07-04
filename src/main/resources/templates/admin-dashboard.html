@@ -243,6 +243,30 @@
                 </div>
             </div>
 
+            <div class="card fade-in" style="max-width:480px;margin-top:1.25rem;">
+                <h3 style="font-size:1rem;font-weight:700;margin-bottom:1rem;">🔒 Cambiar contraseña</h3>
+                <form th:action="@{/perfil/contrasena}" method="post" class="perfil-form">
+                    <div class="form-group" style="margin-bottom:.75rem;">
+                        <label class="form-label" style="display:block;font-size:12px;color:var(--text3);margin-bottom:.25rem;">Contraseña actual</label>
+                        <input type="password" name="contrasenaActual" class="form-control" required minlength="4" autocomplete="current-password"
+                               style="width:100%;padding:.6rem 1rem;background:var(--bg3);border:1px solid var(--border);border-radius:6px;color:var(--text1);"/>
+                    </div>
+                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:.75rem;margin-bottom:.75rem;">
+                        <div>
+                            <label class="form-label" style="display:block;font-size:12px;color:var(--text3);margin-bottom:.25rem;">Nueva contraseña</label>
+                            <input type="password" name="contrasenaNueva" class="form-control" required minlength="4" autocomplete="new-password"
+                                   style="width:100%;padding:.6rem 1rem;background:var(--bg3);border:1px solid var(--border);border-radius:6px;color:var(--text1);"/>
+                        </div>
+                        <div>
+                            <label class="form-label" style="display:block;font-size:12px;color:var(--text3);margin-bottom:.25rem;">Confirmar</label>
+                            <input type="password" name="contrasenaConfirmacion" class="form-control" required minlength="4" autocomplete="new-password"
+                                   style="width:100%;padding:.6rem 1rem;background:var(--bg3);border:1px solid var(--border);border-radius:6px;color:var(--text1);"/>
+                        </div>
+                    </div>
+                    <button type="submit" class="btn btn-primary">Actualizar contraseña</button>
+                </form>
+            </div>
+
         </main>
     </div>
 </div>

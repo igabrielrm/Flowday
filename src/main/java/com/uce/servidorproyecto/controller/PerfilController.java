@@ -116,6 +116,32 @@ public class PerfilController {
         return "redirect:/perfil";
     }
 
+    @PostMapping("/perfil/contrasena")
+    public String cambiarContrasena(@RequestParam String contrasenaActual,
+                                    @RequestParam String contrasenaNueva,
+                                    @RequestParam String contrasenaConfirmacion,
+                                    WebRequest request,
+                                    RedirectAttributes ra) {
+        Usuario sesion = (Usuario) request.getAttribute(SESSION_USUARIO, WebRequest.SCOPE_SESSION);
+        if (sesion == null) return "redirect:/login";
+
+        String destino = "ADMIN".equals(sesion.getRol()) ? "redirect:/admin/dashboard" : "redirect:/perfil";
+
+        if (!contrasenaNueva.equals(contrasenaConfirmacion)) {
+            ra.addFlashAttribute("error", "La nueva contraseña y la confirmación no coinciden.");
+            return destino;
+        }
+
+        String error = usuarioService.cambiarContrasena(sesion.getId(), contrasenaActual, contrasenaNueva);
+        if (error != null) {
+            ra.addFlashAttribute("error", error);
+            return destino;
+        }
+
+        ra.addFlashAttribute("exito", "Contraseña actualizada correctamente.");
+        return destino;
+    }
+
     @PostMapping("/perfil/foto")
     public String subirFoto(@RequestParam("foto") MultipartFile foto, WebRequest request,
                             HttpSession session, RedirectAttributes ra) {

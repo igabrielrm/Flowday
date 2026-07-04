@@ -103,6 +103,21 @@ public class UsuarioService {
         usuarioRepository.save(u);
     }
 
+    /** @return null si ok; mensaje de error si falla */
+    public String cambiarContrasena(Long id, String actualPlana, String nuevaPlana) {
+        if (nuevaPlana == null || nuevaPlana.length() < 4) {
+            return "La nueva contraseña debe tener al menos 4 caracteres.";
+        }
+        Usuario u = usuarioRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Usuario no encontrado"));
+        if (!encoder.matches(actualPlana, u.getContrasena())) {
+            return "La contraseña actual es incorrecta.";
+        }
+        u.setContrasena(encoder.encode(nuevaPlana));
+        usuarioRepository.save(u);
+        return null;
+    }
+
     public void desactivarCuenta(Long id) {
         Usuario u = usuarioRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Usuario no encontrado"));
