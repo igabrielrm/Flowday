@@ -1,0 +1,442 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<body>
+
+<div th:fragment="companeroPanel" class="card card-sm fade-in companero-card">
+    <p class="card-title companero-card-title">🐾 Tu compañero virtual</p>
+    <div class="mascota-wrapper">
+        <svg id="mascotaSvg" class="mascota-svg" width="90" height="90" viewBox="0 0 100 100" role="img" aria-label="Compañero virtual">
+            <circle cx="50" cy="55" r="28" fill="#22c55e" opacity=".9"/>
+            <circle cx="50" cy="50" r="22" fill="#0a0a0a"/>
+            <circle cx="43" cy="47" r="4" fill="white"/>
+            <circle cx="57" cy="47" r="4" fill="white"/>
+            <circle cx="44" cy="48" r="2" fill="#0a0a0a"/>
+            <circle cx="58" cy="48" r="2" fill="#0a0a0a"/>
+            <path id="boca" d="M43 56 Q50 62 57 56" fill="none" stroke="white" stroke-width="2" stroke-linecap="round"/>
+            <ellipse cx="30" cy="35" rx="7" ry="10" fill="#22c55e" transform="rotate(-20,30,35)"/>
+            <ellipse cx="70" cy="35" rx="7" ry="10" fill="#22c55e" transform="rotate(20,70,35)"/>
+            <line x1="35" y1="28" x2="28" y2="14" stroke="#22c55e" stroke-width="2.5" stroke-linecap="round"/>
+            <circle cx="28" cy="13" r="3" fill="#22c55e"/>
+            <line x1="65" y1="28" x2="72" y2="14" stroke="#22c55e" stroke-width="2.5" stroke-linecap="round"/>
+            <circle cx="72" cy="13" r="3" fill="#22c55e"/>
+        </svg>
+        <div class="mascota-estado feliz" id="mascotaEstado">😊 ¡Todo bien!</div>
+        <div class="mascota-mensaje" id="mascotaMensaje">Elige una opción para empezar</div>
+    </div>
+
+    <!-- Reproductor Lo-fi integrado (segundo plano en la misma tarjeta) -->
+    <div id="lofiPlayerPanel" class="lofi-inline-panel hidden">
+        <div class="lofi-inline-header">
+            <span id="lofiInlineLabel">🎵 Lo-fi ambiente</span>
+            <button type="button" class="btn-icon btn-icon-sm" onclick="cerrarLofiInline()" title="Ocultar">✕</button>
+        </div>
+        <audio id="lofiAudioGlobal" controls preload="none" class="lofi-inline-audio">
+            <source id="lofiAudioSource" src="" type="audio/mpeg"/>
+        </audio>
+        <div class="lofi-inline-modes">
+            <button type="button" class="companero-menu-btn lofi-mode-btn" data-lofi="default">☕ Ambiente</button>
+            <button type="button" class="companero-menu-btn lofi-mode-btn" data-lofi="jazz">🎷 Jazz</button>
+            <button type="button" class="companero-menu-btn lofi-mode-btn" data-lofi="chill">🌿 Chill</button>
+        </div>
+    </div>
+
+    <div class="companero-menu">
+        <button type="button" class="companero-menu-btn" data-accion="consejo">💡 Consejo</button>
+        <button type="button" class="companero-menu-btn" data-accion="lofi">🎵 Lo-fi</button>
+        <button type="button" class="companero-menu-btn" data-accion="respirar">🌬️ Respirar</button>
+        <button type="button" class="companero-menu-btn" data-accion="motivar">💪 Motivación</button>
+        <button type="button" class="companero-menu-btn" data-accion="chat">🤖 Chat IA</button>
+    </div>
+
+    <div id="companeroChatPanel" class="companero-chat-panel hidden">
+        <div id="companeroChatMessages" class="companero-chat-messages"></div>
+        <form class="companero-chat-form" onsubmit="return enviarChatCompanero(event, 'companeroChatMessages', 'companeroChatInput')">
+            <input type="text" id="companeroChatInput" class="form-control" placeholder="Pregúntame sobre estudio, organización..." maxlength="500" autocomplete="off"/>
+            <button type="submit" class="btn btn-primary btn-sm">Enviar</button>
+        </form>
+    </div>
+</div>
+
+<div th:fragment="companeroModal" id="modalCompanero" class="modal-overlay hidden" role="dialog">
+    <div class="modal-card modal-companero-card">
+        <div class="modal-header">
+            <h3 id="companeroModalTitulo">Compañero virtual</h3>
+            <button type="button" class="btn-icon" onclick="cerrarModalCompanero()" aria-label="Cerrar">✕</button>
+        </div>
+        <div id="companeroModalBody" class="companero-modal-body"></div>
+    </div>
+</div>
+
+<script th:fragment="companeroScripts">
+(function () {
+    const LOFI_STREAMS = {
+        default: { name: 'Lo-fi ambiente', url: 'https://ice1.somafm.com/groovesalad-128-mp3' },
+        jazz: { name: 'Jazz suave', url: 'https://ice1.somafm.com/lush-128-mp3' },
+        chill: { name: 'Chill internacional', url: 'https://ice1.somafm.com/deepspaceone-128-mp3' }
+    };
+
+    const consejos = [
+        'Completa primero las tareas de prioridad ALTA 🎯',
+        'Divide las tareas grandes en bloques de 25 minutos 🍅',
+        'Toma agua cada hora — tu cerebro lo agradece 💧',
+        'Una pausa de 5 min mejora tu concentración ☕',
+        'Revisa el semáforo académico antes de planificar el día 🚦',
+        'Si te sientes saturado, usa Reagendar en tus citas ⚡'
+    ];
+
+    const motivaciones = [
+        '¡Tú puedes con esto! Un paso a la vez 💪',
+        'Cada sesión de estudio te acerca a tu meta 🎓',
+        'La constancia vence a la perfección 🔥',
+        'Hoy es un buen día para avanzar ✨',
+        'Confía en tu proceso — vas bien 🌱'
+    ];
+
+    let consejoIdx = 0;
+    let respiracionInterval = null;
+    let lofiActual = 'default';
+
+    function prefs() {
+        try { return JSON.parse(localStorage.getItem('companeroPrefs') || '{}'); }
+        catch (_) { return {}; }
+    }
+
+    function guardarPrefs(p) {
+        localStorage.setItem('companeroPrefs', JSON.stringify({ ...prefs(), ...p }));
+    }
+
+    function animarMascota() {
+        const svg = document.getElementById('mascotaSvg');
+        if (svg) {
+            svg.style.transform = 'scale(1.08)';
+            setTimeout(() => { svg.style.transform = ''; }, 200);
+        }
+    }
+
+    function setMensaje(texto) {
+        const msg = document.getElementById('mascotaMensaje');
+        const floatMsg = document.getElementById('floatMascotaMensaje');
+        if (msg) msg.textContent = texto;
+        if (floatMsg) floatMsg.textContent = texto;
+        animarMascota();
+    }
+
+    function marcarLofiActivo(tipo) {
+        document.querySelectorAll('.lofi-mode-btn').forEach(btn => {
+            btn.classList.toggle('active', btn.getAttribute('data-lofi') === tipo);
+        });
+    }
+
+    window.reproducirLofiInline = function (tipo) {
+        tipo = tipo || prefs().lofiStream || 'default';
+        lofiActual = tipo;
+        const stream = LOFI_STREAMS[tipo] || LOFI_STREAMS.default;
+        const panel = document.getElementById('lofiPlayerPanel') || document.getElementById('lofiPlayerPanelFloat');
+        const audio = document.getElementById('lofiAudioGlobal');
+        const source = document.getElementById('lofiAudioSource');
+        const label = document.getElementById('lofiInlineLabel') || document.getElementById('lofiInlineLabelFloat');
+
+        if (!panel || !audio || !source) return;
+
+        panel.classList.remove('hidden');
+        if (label) label.textContent = '🎵 ' + stream.name;
+        source.src = stream.url;
+        audio.load();
+        audio.play().catch(() => {});
+        marcarLofiActivo(tipo);
+        guardarPrefs({ lofiStream: tipo, lofiPlaying: true });
+        setMensaje('Música en segundo plano — sigue navegando 🎧');
+    };
+
+    window.cerrarLofiInline = function () {
+        const panel = document.getElementById('lofiPlayerPanel') || document.getElementById('lofiPlayerPanelFloat');
+        const audio = document.getElementById('lofiAudioGlobal');
+        if (audio) audio.pause();
+        if (panel) panel.classList.add('hidden');
+        guardarPrefs({ lofiPlaying: false });
+    };
+
+    window.cambiarLofi = function (tipo) {
+        reproducirLofiInline(tipo);
+    };
+
+    window.cerrarModalCompanero = function () {
+        clearInterval(respiracionInterval);
+        const modal = document.getElementById('modalCompanero');
+        if (modal) modal.classList.add('hidden');
+        const body = document.getElementById('companeroModalBody');
+        if (body) body.innerHTML = '';
+    };
+
+    function abrirModalCompanero(titulo, html) {
+        const modal = document.getElementById('modalCompanero');
+        document.getElementById('companeroModalTitulo').textContent = titulo;
+        document.getElementById('companeroModalBody').innerHTML = html;
+        modal.classList.remove('hidden');
+    }
+
+    function mostrarRespiracion() {
+        abrirModalCompanero('🌬️ Respiración guiada', `
+            <div class="respiracion-circle" id="respiracionCircle">
+                <span id="respiracionFase">Inhala</span>
+                <strong id="respiracionSeg">4</strong>
+            </div>
+            <p class="form-hint" style="text-align:center;margin-top:1rem;">Inhala 4s · mantén 4s · exhala 4s</p>
+            <button type="button" class="btn btn-outline btn-full" style="margin-top:1rem;" onclick="cerrarModalCompanero()">Terminar</button>
+        `);
+        const fases = ['inhala', 'mantén', 'exhala', 'pausa'];
+        let idx = 0, segundos = 4;
+        respiracionInterval = setInterval(() => {
+            segundos--;
+            if (segundos <= 0) {
+                idx = (idx + 1) % fases.length;
+                segundos = 4;
+            }
+            const fase = fases[idx];
+            const faseEl = document.getElementById('respiracionFase');
+            const segEl = document.getElementById('respiracionSeg');
+            const circle = document.getElementById('respiracionCircle');
+            if (faseEl) faseEl.textContent = fase.charAt(0).toUpperCase() + fase.slice(1);
+            if (segEl) segEl.textContent = segundos;
+            if (circle) circle.className = 'respiracion-circle fase-' + fase;
+        }, 1000);
+        setMensaje('Respira con calma 🌬️');
+    }
+
+    document.addEventListener('click', e => {
+        const btn = e.target.closest('.companero-menu-btn[data-accion]');
+        if (!btn) return;
+        const accion = btn.getAttribute('data-accion');
+        if (accion === 'consejo') {
+            setMensaje(consejos[consejoIdx % consejos.length]);
+            consejoIdx++;
+        } else if (accion === 'lofi') {
+            reproducirLofiInline(prefs().lofiStream || 'default');
+        } else if (accion === 'respirar') {
+            mostrarRespiracion();
+        } else if (accion === 'motivar') {
+            setMensaje(motivaciones[Math.floor(Math.random() * motivaciones.length)]);
+        } else if (accion === 'chat') {
+            if (btn.closest('#companeroFloatMenu')) {
+                toggleChatPanel('companeroChatPanelFloat', 'companeroChatMessagesFloat');
+            } else {
+                toggleChatPanel('companeroChatPanel', 'companeroChatMessages');
+            }
+        }
+    });
+
+    document.querySelectorAll('.lofi-mode-btn').forEach(btn => {
+        btn.addEventListener('click', () => reproducirLofiInline(btn.getAttribute('data-lofi')));
+    });
+
+    document.getElementById('modalCompanero')?.addEventListener('click', function (e) {
+        if (e.target === this) cerrarModalCompanero();
+    });
+
+    document.addEventListener('DOMContentLoaded', () => {
+        const p = prefs();
+        if (p.lofiPlaying && p.lofiStream) {
+            reproducirLofiInline(p.lofiStream);
+        }
+    });
+
+    window.initCompaneroVirtual = function (opts) {
+        if (!opts) return;
+        const estado = document.getElementById('mascotaEstado') || document.getElementById('floatMascotaEstado');
+        const boca = document.getElementById('boca') || document.getElementById('floatBoca');
+        if (opts.saturado && estado && boca) {
+            boca.setAttribute('d', 'M43 60 Q50 55 57 60');
+            estado.textContent = estado.id === 'floatMascotaEstado' ? '!' : 'Día cargado';
+            estado.className = estado.id === 'floatMascotaEstado'
+                ? 'companero-float-badge estresado'
+                : 'mascota-estado estresado';
+            setMensaje('Te sugiero una pausa o música lo-fi');
+        }
+    };
+
+    function toggleChatPanel(panelId, messagesId) {
+        const panel = document.getElementById(panelId);
+        if (!panel) return;
+        const opening = panel.classList.contains('hidden');
+        panel.classList.toggle('hidden');
+        if (opening) {
+            const msgs = document.getElementById(messagesId);
+            if (msgs && !msgs.children.length) {
+                appendChatBubble(msgs, 'bot', '¡Hola! Soy tu compañero IA. ¿En qué puedo ayudarte con tus estudios?');
+            }
+            panel.querySelector('input')?.focus();
+        }
+    }
+
+    function appendChatBubble(container, role, text) {
+        const div = document.createElement('div');
+        div.className = 'companero-chat-bubble ' + (role === 'user' ? 'chat-user' : 'chat-bot');
+        div.textContent = text;
+        container.appendChild(div);
+        container.scrollTop = container.scrollHeight;
+    }
+
+    window.enviarChatCompanero = async function (e, messagesId, inputId) {
+        e.preventDefault();
+        const input = document.getElementById(inputId);
+        const msgs = document.getElementById(messagesId);
+        if (!input || !msgs) return false;
+        const texto = input.value.trim();
+        if (!texto) return false;
+        appendChatBubble(msgs, 'user', texto);
+        input.value = '';
+        input.disabled = true;
+        const loading = document.createElement('div');
+        loading.className = 'companero-chat-bubble chat-bot chat-loading';
+        loading.textContent = 'Pensando...';
+        msgs.appendChild(loading);
+        msgs.scrollTop = msgs.scrollHeight;
+        try {
+            const res = await fetch('/api/ia/chat', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ mensaje: texto })
+            });
+            const data = await res.json();
+            loading.remove();
+            appendChatBubble(msgs, 'bot', data.respuesta || data.mensaje || 'No pude responder ahora.');
+        } catch (_) {
+            loading.remove();
+            appendChatBubble(msgs, 'bot', 'Hubo un error de conexión. Intenta de nuevo.');
+        }
+        input.disabled = false;
+        input.focus();
+        return false;
+    };
+
+    window.toggleChatPanel = toggleChatPanel;
+})();
+</script>
+
+<!-- Burbuja flotante arrastrable -->
+<div th:fragment="companeroFlotante" id="companeroFlotante" class="companero-flotante">
+    <button type="button" id="companeroFloatBtn" class="companero-float-bubble" aria-label="Compañero virtual">
+        <svg id="floatMascotaSvg" width="52" height="52" viewBox="0 0 100 100" aria-hidden="true">
+            <circle cx="50" cy="55" r="28" fill="#22c55e"/>
+            <circle cx="50" cy="50" r="22" fill="#0a0a0a"/>
+            <circle cx="43" cy="47" r="4" fill="white"/>
+            <circle cx="57" cy="47" r="4" fill="white"/>
+            <path id="floatBoca" d="M43 56 Q50 62 57 56" fill="none" stroke="white" stroke-width="2" stroke-linecap="round"/>
+        </svg>
+        <span id="floatMascotaEstado" class="companero-float-badge">OK</span>
+    </button>
+    <div id="companeroFloatMenu" class="companero-float-menu hidden">
+        <p class="companero-float-title">Compañero virtual</p>
+        <p class="mascota-mensaje" id="floatMascotaMensaje">Elige una opción</p>
+        <div class="companero-menu companero-menu-compact">
+            <button type="button" class="companero-menu-btn" data-accion="consejo">Consejo</button>
+            <button type="button" class="companero-menu-btn" data-accion="lofi">Lo-fi</button>
+            <button type="button" class="companero-menu-btn" data-accion="respirar">Respirar</button>
+            <button type="button" class="companero-menu-btn" data-accion="motivar">Motivación</button>
+            <button type="button" class="companero-menu-btn" data-accion="chat">Chat IA</button>
+        </div>
+        <div id="companeroChatPanelFloat" class="companero-chat-panel hidden">
+            <div id="companeroChatMessagesFloat" class="companero-chat-messages"></div>
+            <form class="companero-chat-form" onsubmit="return enviarChatCompanero(event, 'companeroChatMessagesFloat', 'companeroChatInputFloat')">
+                <input type="text" id="companeroChatInputFloat" class="form-control" placeholder="Pregúntame algo..." maxlength="500" autocomplete="off"/>
+                <button type="submit" class="btn btn-primary btn-sm">Enviar</button>
+            </form>
+        </div>
+        <div id="lofiPlayerPanelFloat" class="lofi-inline-panel hidden">
+            <div class="lofi-inline-header">
+                <span id="lofiInlineLabelFloat">Lo-fi ambiente</span>
+                <button type="button" class="btn-icon btn-icon-sm" onclick="cerrarLofiInline()" title="Ocultar">✕</button>
+            </div>
+            <audio id="lofiAudioGlobal" controls preload="none" class="lofi-inline-audio">
+                <source id="lofiAudioSource" src="" type="audio/mpeg"/>
+            </audio>
+            <div class="lofi-inline-modes">
+                <button type="button" class="companero-menu-btn lofi-mode-btn" data-lofi="default">Ambiente</button>
+                <button type="button" class="companero-menu-btn lofi-mode-btn" data-lofi="jazz">Jazz</button>
+                <button type="button" class="companero-menu-btn lofi-mode-btn" data-lofi="chill">Chill</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script th:fragment="companeroFlotanteScripts">
+(function () {
+    const root = document.getElementById('companeroFlotante');
+    const btn = document.getElementById('companeroFloatBtn');
+    const menu = document.getElementById('companeroFloatMenu');
+    if (!root || !btn || !menu) return;
+
+    const saved = JSON.parse(localStorage.getItem('companeroFloatPos') || '{"x":null,"y":null}');
+    if (saved.x != null && saved.y != null) {
+        root.style.left = saved.x + 'px';
+        root.style.top = saved.y + 'px';
+        root.style.right = 'auto';
+        root.style.bottom = 'auto';
+    }
+
+    let dragging = false, moved = false, startX = 0, startY = 0, origX = 0, origY = 0;
+
+    function positionFloatMenu() {
+        menu.classList.remove('float-menu-up', 'float-menu-down', 'float-menu-hang-left', 'float-menu-hang-right');
+        const rect = root.getBoundingClientRect();
+        const cx = rect.left + rect.width / 2;
+        const cy = rect.top + rect.height / 2;
+        const openUp = cy > window.innerHeight * 0.45;
+        const onRightSide = cx > window.innerWidth * 0.5;
+        menu.classList.add(openUp ? 'float-menu-up' : 'float-menu-down');
+        menu.classList.add(onRightSide ? 'float-menu-hang-left' : 'float-menu-hang-right');
+    }
+
+    function toggleFloatMenu() {
+        const wasHidden = menu.classList.contains('hidden');
+        if (wasHidden) positionFloatMenu();
+        menu.classList.toggle('hidden');
+    }
+
+    btn.addEventListener('pointerdown', e => {
+        if (e.target.closest('.companero-float-menu')) return;
+        dragging = true;
+        moved = false;
+        startX = e.clientX;
+        startY = e.clientY;
+        const rect = root.getBoundingClientRect();
+        origX = rect.left;
+        origY = rect.top;
+        btn.setPointerCapture(e.pointerId);
+    });
+
+    btn.addEventListener('pointermove', e => {
+        if (!dragging) return;
+        const dx = e.clientX - startX;
+        const dy = e.clientY - startY;
+        if (Math.abs(dx) + Math.abs(dy) > 8) moved = true;
+        if (!moved) return;
+        menu.classList.add('hidden');
+        const nx = Math.max(8, Math.min(window.innerWidth - 72, origX + dx));
+        const ny = Math.max(72, Math.min(window.innerHeight - 72, origY + dy));
+        root.style.left = nx + 'px';
+        root.style.top = ny + 'px';
+        root.style.right = 'auto';
+        root.style.bottom = 'auto';
+    });
+
+    btn.addEventListener('pointerup', e => {
+        if (!dragging) return;
+        dragging = false;
+        btn.releasePointerCapture(e.pointerId);
+        if (moved) {
+            const rect = root.getBoundingClientRect();
+            localStorage.setItem('companeroFloatPos', JSON.stringify({ x: rect.left, y: rect.top }));
+        } else {
+            toggleFloatMenu();
+        }
+    });
+
+    document.addEventListener('click', e => {
+        if (!root.contains(e.target)) menu.classList.add('hidden');
+    });
+})();
+</script>
+
+</body>
+</html>

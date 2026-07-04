@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" data-theme="dark">
+<head>
+    <meta charset="UTF-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1"/>
+    <title>Crear cuenta — Paso 2</title>
+    <link rel="stylesheet" th:href="@{/css/app.css}"/>
+</head>
+<body class="auth-page-body auth-register-body">
+
+<div th:replace="~{fragments/auth-common :: authBackground}"></div>
+<header th:replace="~{fragments/auth-common :: authTopbar}"></header>
+
+<div class="auth-page-content auth-register-content">
+    <div class="auth-split-card auth-register-card fade-in">
+        <div class="auth-float-brand">
+            <h2>Event Organizer UCE</h2>
+            <p>Crea tu cuenta en 3 pasos</p>
+        </div>
+
+        <p class="steps-label">Paso 2 de 3 — Información personal</p>
+        <div class="steps-header">
+            <div class="step-segment done"></div>
+            <div class="step-segment done"></div>
+            <div class="step-segment"></div>
+        </div>
+
+        <div th:if="${error}" class="alert alert-danger"><span th:text="${error}"></span></div>
+
+        <h2 class="auth-register-heading">Datos personales</h2>
+        <p class="auth-register-sub">Nos ayuda a personalizar tu experiencia académica</p>
+
+        <form th:action="@{/registro/paso2}" method="post" class="auth-form">
+            <div class="form-group">
+                <label class="form-label">Carrera</label>
+                <select name="carrera" class="form-control auth-input-lg" required>
+                    <option value="">Selecciona tu carrera...</option>
+                    <option>Ingeniería en Sistemas de Información</option>
+                    <option>Ingeniería Civil</option>
+                    <option>Medicina</option>
+                    <option>Derecho</option>
+                    <option>Economía</option>
+                    <option>Arquitectura</option>
+                    <option>Psicología</option>
+                    <option>Comunicación Social</option>
+                    <option>Ingeniería Química</option>
+                    <option>Enfermería</option>
+                    <option>Otra</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Teléfono celular</label>
+                <input type="tel" name="telefono" class="form-control auth-input-lg"
+                       placeholder="0991234567" required pattern="\d{10}" maxlength="10"
+                       title="10 dígitos numéricos"/>
+            </div>
+            <div class="form-row auth-form-row-2">
+                <div class="form-group">
+                    <label class="form-label">Fecha de nacimiento</label>
+                    <input type="date" name="fechaNacimiento" class="form-control auth-input-lg"/>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Género</label>
+                    <select name="genero" class="form-control auth-input-lg">
+                        <option value="">Seleccionar...</option>
+                        <option>Masculino</option>
+                        <option>Femenino</option>
+                        <option>No binario</option>
+                        <option>Prefiero no decir</option>
+                    </select>
+                </div>
+            </div>
+            <button type="submit" class="btn btn-primary btn-full btn-lg">Continuar</button>
+        </form>
+    </div>
+</div>
+
+<script th:replace="~{fragments/auth-common :: authThemeScript}"></script>
+</body>
+</html>

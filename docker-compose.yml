@@ -1,0 +1,93 @@
+# ============================================
+# DOCKER COMPOSE - Event Organizer UCE
+# ============================================
+
+version: '3.8'
+
+services:
+  # ============================================
+  # 1. POSTGRESQL - Base de datos
+  # ============================================
+  postgres:
+    image: postgres:16-alpine
+    container_name: eventorganizer_db
+    environment:
+      POSTGRES_DB: eventorganizer_uce
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: labcom,2015
+      POSTGRES_INITDB_ARGS: "--encoding=UTF8 --locale=es_EC.UTF-8"
+      TZ: America/Guayaquil
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./init-db.sql:/docker-entrypoint-initdb.d/init-db.sql
+    networks:
+      - eventorganizer_network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ============================================
+  # 2. APLICACIÓN - Event Organizer
+  # ============================================
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: eventorganizer_app
+    environment:
+      DB_URL: jdbc:postgresql://postgres:5432/eventorganizer_uce
+      DB_USERNAME: postgres
+      DB_PASSWORD: labcom,2015
+      SPRING_PROFILES_ACTIVE: prod
+      TZ: America/Guayaquil
+    ports:
+      - "8080:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - eventorganizer_network
+    restart: unless-stopped
+    volumes:
+      - ./logs:/app/logs
+
+  # ============================================
+  # 3. PGADMIN - Gestor de BD (Opcional)
+  # ============================================
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: eventorganizer_pgadmin
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@eventorganizer.com
+      PGADMIN_DEFAULT_PASSWORD: admin123
+      TZ: America/Guayaquil
+    ports:
+      - "5050:80"
+    depends_on:
+      - postgres
+    networks:
+      - eventorganizer_network
+    restart: unless-stopped
+    volumes:
+      - pgadmin_data:/var/lib/pgadmin
+
+# ============================================
+# VOLÚMENES
+# ============================================
+volumes:
+  postgres_data:
+    driver: local
+  pgadmin_data:
+    driver: local
+
+# ============================================
+# REDES
+# ============================================
+networks:
+  eventorganizer_network:
+    driver: bridge

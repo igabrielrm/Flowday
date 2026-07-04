@@ -1,0 +1,328 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" data-theme="dark">
+<head>
+    <meta charset="UTF-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1"/>
+    <title>Mis Actividades - Event Organizer UCE</title>
+    <th:block th:replace="~{fragments/pwa-head :: pwaHead}"></th:block>
+    <link rel="stylesheet" th:href="@{/css/app.css}"/>
+</head>
+<body>
+<div class="layout">
+
+    <aside th:replace="~{dashboard :: menuLateral}"></aside>
+
+    <div class="main-content">
+        <header class="topbar">
+            <div class="topbar-left">
+                <button class="btn-icon" onclick="toggleSidebar()" aria-label="Menú">☰</button>
+                <div class="page-hero" style="margin:0;">
+                    <h1 class="page-hero-title">Mis actividades</h1>
+                    <p class="page-hero-sub">Gestiona, filtra y actualiza todas tus tareas</p>
+                </div>
+            </div>
+            <div class="topbar-actions">
+                <a th:href="@{/actividades/nueva}" class="btn btn-primary">+ Nueva actividad</a>
+                <div th:replace="~{fragments/notificaciones-bell :: campana}"></div>
+                <button class="btn-icon" data-theme-btn onclick="toggleTheme()">☀️</button>
+            </div>
+        </header>
+
+        <main class="page-body">
+            <div th:if="${exito}" class="alert alert-success"><span th:text="${exito}"></span></div>
+            <div th:if="${error}" class="alert alert-danger"><span th:text="${error}"></span></div>
+
+            <div class="actividades-stats">
+                <div class="stat-chip">Total: <strong id="resumenTotal">0</strong></div>
+                <div class="stat-chip">Pendientes: <strong id="resumenPendientes">0</strong></div>
+                <div class="stat-chip">Completadas: <strong id="resumenCompletadas">0</strong></div>
+            </div>
+
+            <div class="filtro-seccion-tabs" id="filtroSeccionTabs">
+                <button type="button" class="filtro-tab active" data-seccion="todas">Todas</button>
+                <button type="button" class="filtro-tab" data-seccion="hoy">Hoy</button>
+                <button type="button" class="filtro-tab" data-seccion="manana">Mañana</button>
+                <button type="button" class="filtro-tab" data-seccion="semana">Esta semana</button>
+            </div>
+
+            <div class="card fade-in actividades-card">
+                <div class="filtros-bar">
+                    <p class="filtros-bar-label" style="width:100%;margin:0 0 0.5rem;">Buscar y filtrar</p>
+                    <input type="text" class="form-control filtro-input" id="filtroBusqueda"
+                           placeholder="Título, materia o tipo..." autocomplete="off"/>
+                    <select class="form-control filtro-select" id="filtroEstado">
+                        <option value="">Todos los estados</option>
+                        <option value="PENDIENTE">Pendiente</option>
+                        <option value="EN_PROCESO">En proceso</option>
+                        <option value="COMPLETADA">Completada</option>
+                        <option value="REAGENDADA">Reagendada</option>
+                    </select>
+                    <select class="form-control filtro-select" id="filtroPrioridad">
+                        <option value="">Todas las prioridades</option>
+                        <option value="ALTA">Alta</option>
+                        <option value="MEDIA">Media</option>
+                        <option value="BAJA">Baja</option>
+                    </select>
+                    <button type="button" class="btn btn-outline" id="btnLimpiar">Limpiar</button>
+                </div>
+
+                <div class="table-responsive actividades-tabla-wrap">
+                    <table class="tabla-actividades" id="tablaActividades">
+                        <thead>
+                            <tr>
+                                <th></th>
+                                <th>Título</th>
+                                <th>Materia</th>
+                                <th>Fecha</th>
+                                <th>Hora</th>
+                                <th>Prioridad</th>
+                                <th>Estado</th>
+                                <th>Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody id="cuerpoActividades">
+                            <tr th:each="info : ${actividadesInfo}" class="fila-actividad"
+                                th:attr="data-id=${info.id},
+                                         data-estado=${info.estado},
+                                         data-prioridad=${info.prioridad},
+                                         data-fecha=${info.fechaInicio},
+                                         data-propietario=${info.esPropietario},
+                                         data-busqueda=${#strings.toLowerCase((info.titulo ?: '') + ' ' + (info.materia ?: '') + ' ' + (info.tipo ?: ''))}">
+                                <td onclick="event.stopPropagation()">
+                                    <span class="color-dot" th:style="'background:' + (${info.color} ?: '#3b82f6')"></span>
+                                </td>
+                                <td>
+                                    <strong th:text="${info.titulo}">Título</strong>
+                                    <span class="tipo-chip" th:text="${info.tipo}">TIPO</span>
+                                    <span th:if="${info.esCompartida}" class="badge badge-compartida">Compartida</span>
+                                </td>
+                                <td th:text="${info.materia ?: '—'}">—</td>
+                                <td th:text="${info.fechaInicio}">—</td>
+                                <td th:text="${info.horaInicio != null ? info.horaInicio : '—'}">—</td>
+                                <td>
+                                    <span class="badge" th:classappend="' badge-' + ${#strings.toLowerCase(info.prioridad ?: 'media')}"
+                                          th:text="${info.prioridad ?: 'MEDIA'}">MEDIA</span>
+                                </td>
+                                <td onclick="event.stopPropagation()">
+                                    <form th:if="${info.esPropietario}" th:action="@{'/actividades/estado/' + ${info.id}}" method="post" class="estado-form">
+                                        <select name="estado" class="estado-select" onchange="this.form.submit()"
+                                                th:attr="aria-label='Estado de ' + ${info.titulo}">
+                                            <option value="PENDIENTE" th:selected="${info.estado == 'PENDIENTE'}">Pendiente</option>
+                                            <option value="EN_PROCESO" th:selected="${info.estado == 'EN_PROCESO'}">En proceso</option>
+                                            <option value="COMPLETADA" th:selected="${info.estado == 'COMPLETADA'}">Completada</option>
+                                            <option value="REAGENDADA" th:selected="${info.estado == 'REAGENDADA'}">Reagendada</option>
+                                        </select>
+                                    </form>
+                                    <span th:unless="${info.esPropietario}" class="estado-readonly" th:text="${info.estado}">PENDIENTE</span>
+                                </td>
+                                <td onclick="event.stopPropagation()">
+                                    <div class="acciones-row">
+                                        <a th:if="${info.esPropietario}" th:href="@{'/actividades/editar/' + ${info.id}}" class="action-btn" title="Editar">Editar</a>
+                                        <a th:unless="${info.esPropietario}" th:href="@{'/actividades/editar/' + ${info.id}}" class="action-btn" title="Ver">Ver</a>
+                                        <button th:if="${info.esPropietario and info.estado != 'COMPLETADA' and (info.tipo == 'REUNION_GRUPAL' or info.tipo == 'CITA_MEDICA' or info.tipo == 'CITA_LABORAL' or info.tipo == 'TRABAJO_GRUPO')}"
+                                                type="button" class="action-btn action-btn-accent" title="Reagendar"
+                                                th:attr="onclick=|abrirModalReagendar(${info.id})|">Reagendar</button>
+                                        <button th:if="${info.esPropietario}" type="button" class="action-btn action-btn-danger btn-eliminar-act"
+                                                th:attr="data-id=${info.id}">Eliminar</button>
+                                    </div>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <div class="actividades-cards" id="actividadesCards">
+                    <div th:each="info : ${actividadesInfo}" class="actividad-card fila-actividad-card"
+                         th:attr="data-id=${info.id},
+                                  data-estado=${info.estado},
+                                  data-prioridad=${info.prioridad},
+                                  data-fecha=${info.fechaInicio},
+                                  data-propietario=${info.esPropietario},
+                                  data-busqueda=${#strings.toLowerCase((info.titulo ?: '') + ' ' + (info.materia ?: '') + ' ' + (info.tipo ?: ''))}">
+                        <div class="actividad-card-header">
+                            <span class="color-dot" th:style="'background:' + (${info.color} ?: '#3b82f6')"></span>
+                            <strong th:text="${info.titulo}">Título</strong>
+                            <span th:if="${info.esCompartida}" class="badge badge-compartida">Compartida</span>
+                        </div>
+                        <div class="actividad-card-meta">
+                            <span th:text="${info.fechaInicio}">fecha</span>
+                            <span th:text="${info.horaInicio != null ? info.horaInicio : '—'}">hora</span>
+                            <span class="badge" th:classappend="' badge-' + ${#strings.toLowerCase(info.prioridad ?: 'media')}"
+                                  th:text="${info.prioridad ?: 'MEDIA'}">MEDIA</span>
+                        </div>
+                        <div class="actividad-card-actions">
+                            <a th:href="@{'/actividades/editar/' + ${info.id}}" class="action-btn"
+                               th:text="${info.esPropietario} ? 'Editar' : 'Ver'">Ver</a>
+                            <button th:if="${info.esPropietario}" type="button" class="action-btn action-btn-danger btn-eliminar-act"
+                                    th:attr="data-id=${info.id}">Eliminar</button>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="sinResultados" class="empty-filter hidden">
+                    <p>No hay actividades que coincidan con los filtros.</p>
+                    <button type="button" class="btn btn-outline btn-sm" onclick="limpiarFiltros()">Limpiar filtros</button>
+                </div>
+
+                <div id="sinActividades" class="empty-state" th:classappend="${!#lists.isEmpty(actividadesInfo)} ? ' hidden' : ''">
+                    <p>No tienes actividades registradas.</p>
+                    <a th:href="@{/actividades/nueva}" class="btn btn-primary" style="margin-top:1rem;">+ Crear primera actividad</a>
+                </div>
+
+                <p class="form-hint lista-footer-hint">Haz click en una fila o tarjeta para ver detalle y Pomodoro</p>
+            </div>
+        </main>
+    </div>
+</div>
+
+<div th:replace="~{fragments/modal-reagendar :: modalReagendar}"></div>
+<div th:replace="~{fragments/modal-detalle-actividad :: modalDetalleActividad}"></div>
+<div th:replace="~{fragments/modal-confirmar :: modalConfirmar}"></div>
+<div th:replace="~{fragments/companero-virtual :: companeroModal}"></div>
+<div th:replace="~{fragments/companero-virtual :: companeroFlotante}"></div>
+
+<script th:replace="~{fragments/layout-scripts :: layoutScripts}"></script>
+<script th:replace="~{fragments/companero-virtual :: companeroScripts}"></script>
+<script th:replace="~{fragments/companero-virtual :: companeroFlotanteScripts}"></script>
+<script th:replace="~{fragments/modal-reagendar :: reagendarScripts}"></script>
+<script th:replace="~{fragments/modal-detalle-actividad :: detalleActividadScripts}"></script>
+<script th:replace="~{fragments/modal-confirmar :: confirmarScripts}"></script>
+<script>
+    const filtroBusqueda = document.getElementById('filtroBusqueda');
+    const filtroEstado = document.getElementById('filtroEstado');
+    const filtroPrioridad = document.getElementById('filtroPrioridad');
+    const sinResultados = document.getElementById('sinResultados');
+    const sinActividades = document.getElementById('sinActividades');
+    let seccionActiva = 'todas';
+
+    function formatFechaLocal(d) {
+        const y = d.getFullYear();
+        const m = String(d.getMonth() + 1).padStart(2, '0');
+        const day = String(d.getDate()).padStart(2, '0');
+        return y + '-' + m + '-' + day;
+    }
+
+    function cumpleSeccion(fechaStr) {
+        if (!fechaStr || seccionActiva === 'todas') return true;
+        const hoy = new Date();
+        const manana = new Date();
+        manana.setDate(hoy.getDate() + 1);
+        const finSemana = new Date();
+        finSemana.setDate(hoy.getDate() + 7);
+        const f = new Date(fechaStr + 'T12:00:00');
+        if (seccionActiva === 'hoy') return fechaStr === formatFechaLocal(hoy);
+        if (seccionActiva === 'manana') return fechaStr === formatFechaLocal(manana);
+        if (seccionActiva === 'semana') {
+            const hoyStr = formatFechaLocal(hoy);
+            const finStr = formatFechaLocal(finSemana);
+            return fechaStr >= hoyStr && fechaStr <= finStr;
+        }
+        return true;
+    }
+
+    function obtenerFilas() {
+        return document.querySelectorAll('#cuerpoActividades .fila-actividad, #actividadesCards .fila-actividad-card');
+    }
+
+    function filtrarTabla() {
+        const busqueda = (filtroBusqueda?.value || '').trim().toLowerCase();
+        const estado = filtroEstado?.value || '';
+        const prioridad = filtroPrioridad?.value || '';
+        const filas = obtenerFilas();
+
+        let total = 0, pendientes = 0, completadas = 0, visibles = 0;
+
+        filas.forEach(fila => {
+            const texto = (fila.dataset.busqueda || '').toLowerCase();
+            const estadoFila = (fila.dataset.estado || '').trim();
+            const prioridadFila = (fila.dataset.prioridad || '').trim();
+            const fechaFila = fila.dataset.fecha || '';
+
+            let mostrar = true;
+            if (busqueda && !texto.includes(busqueda)) mostrar = false;
+            if (estado && estadoFila !== estado) mostrar = false;
+            if (prioridad && prioridadFila !== prioridad) mostrar = false;
+            if (!cumpleSeccion(fechaFila)) mostrar = false;
+
+            fila.style.display = mostrar ? '' : 'none';
+            if (mostrar && fila.classList.contains('fila-actividad')) {
+                visibles++;
+                total++;
+                if (estadoFila === 'COMPLETADA') completadas++;
+                else if (estadoFila !== 'CANCELADA') pendientes++;
+            }
+        });
+
+        const cardsVisibles = document.querySelectorAll('#actividadesCards .fila-actividad-card:not([style*="none"])').length;
+        if (cardsVisibles > 0 && total === 0) {
+            document.querySelectorAll('#actividadesCards .fila-actividad-card').forEach(c => {
+                if (c.style.display !== 'none') {
+                    total++;
+                    const st = c.dataset.estado || '';
+                    if (st === 'COMPLETADA') completadas++;
+                    else if (st !== 'CANCELADA') pendientes++;
+                }
+            });
+            visibles = Math.max(visibles, cardsVisibles);
+        }
+
+        if (sinResultados) {
+            sinResultados.classList.toggle('hidden', visibles > 0 || filas.length === 0);
+        }
+        if (sinActividades) {
+            sinActividades.classList.toggle('hidden', filas.length > 0);
+        }
+
+        document.getElementById('resumenTotal').textContent = total;
+        document.getElementById('resumenPendientes').textContent = pendientes;
+        document.getElementById('resumenCompletadas').textContent = completadas;
+    }
+
+    function limpiarFiltros() {
+        if (filtroBusqueda) filtroBusqueda.value = '';
+        if (filtroEstado) filtroEstado.value = '';
+        if (filtroPrioridad) filtroPrioridad.value = '';
+        seccionActiva = 'todas';
+        document.querySelectorAll('.filtro-tab').forEach(t => t.classList.toggle('active', t.dataset.seccion === 'todas'));
+        filtrarTabla();
+    }
+
+    document.querySelectorAll('.fila-actividad, .fila-actividad-card').forEach(fila => {
+        fila.addEventListener('click', e => {
+            if (e.target.closest('a, button, select, form')) return;
+            const id = fila.dataset.id;
+            if (id && typeof abrirDetalleActividad === 'function') abrirDetalleActividad(id);
+        });
+    });
+
+    document.querySelectorAll('.btn-eliminar-act').forEach(btn => {
+        btn.addEventListener('click', e => {
+            e.stopPropagation();
+            const id = btn.dataset.id;
+            if (id && typeof eliminarActividadConfirmada === 'function') {
+                eliminarActividadConfirmada(id, () => {
+                    btn.closest('.fila-actividad, .fila-actividad-card')?.remove();
+                    filtrarTabla();
+                });
+            }
+        });
+    });
+
+    document.querySelectorAll('.filtro-tab').forEach(tab => {
+        tab.addEventListener('click', () => {
+            seccionActiva = tab.dataset.seccion || 'todas';
+            document.querySelectorAll('.filtro-tab').forEach(t => t.classList.remove('active'));
+            tab.classList.add('active');
+            filtrarTabla();
+        });
+    });
+
+    filtroBusqueda?.addEventListener('input', filtrarTabla);
+    filtroEstado?.addEventListener('change', filtrarTabla);
+    filtroPrioridad?.addEventListener('change', filtrarTabla);
+    document.getElementById('btnLimpiar')?.addEventListener('click', limpiarFiltros);
+
+    document.addEventListener('DOMContentLoaded', filtrarTabla);
+</script>
+</body>
+</html>

@@ -1,0 +1,327 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" data-theme="dark">
+<head>
+    <meta charset="UTF-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1"/>
+    <title>Calendario - Event Organizer UCE</title>
+    <th:block th:replace="~{fragments/pwa-head :: pwaHead}"></th:block>
+    <link rel="stylesheet" th:href="@{/css/app.css}"/>
+    <style>
+        .calendario-grid {
+            display: grid;
+            grid-template-columns: repeat(7, 1fr);
+            gap: 2px;
+            margin-top: 1rem;
+        }
+        .calendario-dia {
+            background: var(--bg3);
+            border-radius: 4px;
+            padding: .5rem;
+            min-height: 80px;
+            position: relative;
+            cursor: pointer;
+            transition: background .2s;
+        }
+        .calendario-dia:hover {
+            background: var(--bg4);
+        }
+        .calendario-dia.otro-mes {
+            opacity: .4;
+        }
+        .calendario-dia.hoy {
+            border: 2px solid var(--accent-blue);
+        }
+        .calendario-dia .dia-numero {
+            font-weight: 600;
+            font-size: 14px;
+        }
+        .calendario-dia .dia-actividad {
+            font-size: 10px;
+            color: var(--text3);
+            margin-top: .25rem;
+            display: block;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .calendario-dia .dia-actividad.tiene {
+            color: var(--accent-blue);
+        }
+        .calendario-dia .dia-actividad.completada {
+            color: var(--accent-green);
+            text-decoration: line-through;
+        }
+        .calendario-dia .dia-badge {
+            position: absolute;
+            top: 2px;
+            right: 2px;
+            font-size: 8px;
+            padding: 1px 4px;
+            border-radius: 4px;
+        }
+        .calendario-dia .dia-badge.alta { background: var(--accent-red); color: white; }
+        .calendario-dia .dia-badge.media { background: var(--accent-yellow); color: black; }
+        .calendario-dia .dia-badge.baja { background: var(--accent-green); color: white; }
+        .calendario-leyenda {
+            display: flex;
+            gap: 1rem;
+            flex-wrap: wrap;
+            font-size: 12px;
+            color: var(--text2);
+            margin-top: .75rem;
+            padding-top: .75rem;
+            border-top: 1px solid var(--border);
+        }
+        .calendario-leyenda span {
+            display: flex;
+            align-items: center;
+            gap: .25rem;
+        }
+        .calendario-leyenda .dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            display: inline-block;
+        }
+        .dot-blue { background: var(--accent-blue); }
+        .dot-green { background: var(--accent-green); }
+        .dot-red { background: var(--accent-red); }
+        .dot-yellow { background: var(--accent-yellow); }
+        .calendario-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 1rem;
+            flex-wrap: wrap;
+            gap: .5rem;
+        }
+        .calendario-header h2 {
+            font-size: 18px;
+            font-weight: 700;
+        }
+        .calendario-header .nav-buttons {
+            display: flex;
+            gap: .5rem;
+        }
+        .no-actividades {
+            color: var(--text3);
+            font-size: 11px;
+            font-style: italic;
+            margin-top: .25rem;
+        }
+        @media (max-width: 768px) {
+            .calendario-dia {
+                min-height: 60px;
+                padding: .3rem;
+            }
+            .calendario-dia .dia-numero {
+                font-size: 12px;
+            }
+        }
+        @media (max-width: 480px) {
+            .calendario-dia {
+                min-height: 50px;
+                padding: .2rem;
+            }
+            .calendario-dia .dia-numero {
+                font-size: 10px;
+            }
+            .calendario-dia .dia-actividad {
+                font-size: 8px;
+            }
+        }
+    </style>
+</head>
+<body>
+<div class="layout">
+
+    <!-- ===== SIDEBAR ===== -->
+    <aside th:replace="~{dashboard :: menuLateral}"></aside>
+
+    <!-- ===== MAIN CONTENT ===== -->
+    <div class="main-content">
+        <header class="topbar">
+            <div class="topbar-left">
+                <button class="btn-icon" onclick="toggleSidebar()" aria-label="Menú">☰</button>
+                <span class="topbar-title">📅 Calendario</span>
+            </div>
+            <div class="topbar-actions">
+                <div th:replace="~{fragments/notificaciones-bell :: campana}"></div>
+                <button class="btn-icon" data-theme-btn onclick="toggleTheme()">☀️</button>
+            </div>
+        </header>
+
+        <main class="page-body">
+            <div class="card fade-in">
+
+                <!-- ===== HEADER DEL CALENDARIO ===== -->
+                <div class="calendario-header">
+                    <h2 th:text="${mesNombre} + ' ' + ${anio}">Enero 2026</h2>
+                    <div class="nav-buttons">
+                        <a th:href="@{/calendario(mes=${mes.minusMonths(1)})}" class="btn btn-secondary btn-sm">←</a>
+                        <a th:href="@{/calendario}" class="btn btn-secondary btn-sm">Hoy</a>
+                        <a th:href="@{/calendario(mes=${mes.plusMonths(1)})}" class="btn btn-secondary btn-sm">→</a>
+                    </div>
+                </div>
+
+                <!-- ===== GRID DEL CALENDARIO ===== -->
+                <div class="calendario-grid" id="calendarioGrid">
+                    <!-- Días de la semana -->
+                    <div style="text-align:center;font-weight:600;padding:.5rem;color:var(--text3);">Lun</div>
+                    <div style="text-align:center;font-weight:600;padding:.5rem;color:var(--text3);">Mar</div>
+                    <div style="text-align:center;font-weight:600;padding:.5rem;color:var(--text3);">Mié</div>
+                    <div style="text-align:center;font-weight:600;padding:.5rem;color:var(--text3);">Jue</div>
+                    <div style="text-align:center;font-weight:600;padding:.5rem;color:var(--text3);">Vie</div>
+                    <div style="text-align:center;font-weight:600;padding:.5rem;color:var(--text3);">Sáb</div>
+                    <div style="text-align:center;font-weight:600;padding:.5rem;color:var(--text3);">Dom</div>
+                    <!-- Días del mes - se llenan con JavaScript -->
+                </div>
+
+                <!-- ===== LEYENDA ===== -->
+                <div class="calendario-leyenda">
+                    <span><span class="dot dot-blue"></span> Pendientes</span>
+                    <span><span class="dot dot-green"></span> Completadas</span>
+                    <span><span class="dot dot-red"></span> Alta prioridad</span>
+                    <span><span class="dot dot-yellow"></span> Media prioridad</span>
+                    <span>🔵 Click en un día para ver actividades</span>
+                </div>
+            </div>
+        </main>
+    </div>
+</div>
+
+<div th:replace="~{fragments/modal-detalle-actividad :: modalDiaCalendario}"></div>
+<div th:replace="~{fragments/modal-detalle-actividad :: modalDetalleActividad}"></div>
+<div th:replace="~{fragments/modal-confirmar :: modalConfirmar}"></div>
+<div th:replace="~{fragments/companero-virtual :: companeroModal}"></div>
+<div th:replace="~{fragments/companero-virtual :: companeroFlotante}"></div>
+
+<!-- ===== SCRIPTS ===== -->
+<script th:replace="~{fragments/layout-scripts :: layoutScripts}"></script>
+<script th:replace="~{fragments/companero-virtual :: companeroScripts}"></script>
+<script th:replace="~{fragments/companero-virtual :: companeroFlotanteScripts}"></script>
+<script th:replace="~{fragments/modal-detalle-actividad :: detalleActividadScripts}"></script>
+<script th:replace="~{fragments/modal-confirmar :: confirmarScripts}"></script>
+<script th:inline="javascript">
+    const mesNumero = /*[[${mes.monthValue}]]*/ 1;
+    const anioActual = /*[[${anio}]]*/ 2026;
+    const hoy = new Date();
+
+    // ===== FUNCIÓN PARA CARGAR EL CALENDARIO =====
+    async function cargarCalendario(mes, anio) {
+        const grid = document.getElementById('calendarioGrid');
+
+        // Mantener los encabezados
+        const encabezados = grid.querySelectorAll('div:not(.calendario-dia)');
+        grid.innerHTML = '';
+        encabezados.forEach(h => grid.appendChild(h));
+
+        // Obtener actividades del mes desde el backend
+        let actividades = [];
+        try {
+            const response = await fetch(`/calendario/api/actividades?year=${anio}&month=${mes}`);
+            if (response.ok) {
+                actividades = await response.json();
+            }
+        } catch (error) {
+            console.error('Error al cargar actividades:', error);
+        }
+
+        // Agrupar actividades por día (sin problemas de zona horaria)
+        const actividadesPorDia = {};
+        actividades.forEach(a => {
+            if (!a.fechaInicio) return;
+            const partes = String(a.fechaInicio).split('T')[0].split('-');
+            const y = parseInt(partes[0], 10);
+            const m = parseInt(partes[1], 10);
+            const dia = parseInt(partes[2], 10);
+            if (y !== anio || m !== mes) return;
+            if (!actividadesPorDia[dia]) actividadesPorDia[dia] = [];
+            actividadesPorDia[dia].push(a);
+        });
+
+        const primerDia = new Date(anio, mes - 1, 1);
+        const ultimoDia = new Date(anio, mes, 0);
+        const diasEnMes = ultimoDia.getDate();
+        const primerDiaSemana = primerDia.getDay(); // 0=Dom, 6=Sáb
+
+        // Ajustar para que lunes sea el primer día
+        const inicio = primerDiaSemana === 0 ? 6 : primerDiaSemana - 1;
+
+        // Días del mes anterior
+        const diasMesAnterior = new Date(anio, mes - 1, 0).getDate();
+        for (let i = inicio - 1; i >= 0; i--) {
+            const dia = diasMesAnterior - i;
+            const div = document.createElement('div');
+            div.className = 'calendario-dia otro-mes';
+            div.innerHTML = `<span class="dia-numero">${dia}</span>`;
+            grid.appendChild(div);
+        }
+
+        // ===== DÍAS DEL MES ACTUAL (CON RESALTADO DE PRIORIDAD) =====
+        for (let d = 1; d <= diasEnMes; d++) {
+            const div = document.createElement('div');
+            div.className = 'calendario-dia';
+            if (d === hoy.getDate() && mes === hoy.getMonth() + 1 && anio === hoy.getFullYear()) {
+                div.classList.add('hoy');
+            }
+
+            const actDia = actividadesPorDia[d] || [];
+
+            // ===== NUEVO: CALCULAR COLOR DE FONDO SEGÚN PRIORIDAD =====
+            let colorFondo = '';
+            if (actDia.length > 0) {
+                const tieneAlta = actDia.some(a => a.prioridad === 'ALTA' && a.estado !== 'COMPLETADA');
+                const tieneMedia = actDia.some(a => a.prioridad === 'MEDIA' && a.estado !== 'COMPLETADA');
+                if (tieneAlta) {
+                    colorFondo = 'background: rgba(239, 68, 68, 0.15); border-left: 4px solid #ef4444;';
+                } else if (tieneMedia) {
+                    colorFondo = 'background: rgba(245, 158, 11, 0.10); border-left: 4px solid #f59e0b;';
+                } else {
+                    colorFondo = 'background: rgba(34, 197, 94, 0.05); border-left: 4px solid #22c55e;';
+                }
+            }
+            if (colorFondo) {
+                div.setAttribute('style', colorFondo);
+            }
+
+            let html = `<span class="dia-numero">${d}</span>`;
+            if (actDia.length > 0) {
+                const maxMostrar = Math.min(actDia.length, 2);
+                for (let i = 0; i < maxMostrar; i++) {
+                    const a = actDia[i];
+                    const clase = a.estado === 'COMPLETADA' ? 'completada' : 'tiene';
+                    html += `<span class="dia-actividad ${clase}">${a.titulo}</span>`;
+                }
+                if (actDia.length > 2) {
+                    html += `<span class="dia-actividad">+${actDia.length - 2} más</span>`;
+                }
+            }
+
+            div.innerHTML = html;
+            div.onclick = function() {
+                const fechaStr = anio + '-' + String(mes).padStart(2,'0') + '-' + String(d).padStart(2,'0');
+                if (typeof abrirModalDiaCalendario === 'function') {
+                    abrirModalDiaCalendario(fechaStr);
+                }
+            };
+            grid.appendChild(div);
+        }
+
+        // Días del mes siguiente
+        const totalDiasMostrados = 42;
+        const actuales = inicio + diasEnMes;
+        const faltantes = totalDiasMostrados - actuales;
+        for (let d = 1; d <= faltantes; d++) {
+            const div = document.createElement('div');
+            div.className = 'calendario-dia otro-mes';
+            div.innerHTML = `<span class="dia-numero">${d}</span>`;
+            grid.appendChild(div);
+        }
+    }
+
+    // ===== INICIALIZAR =====
+    cargarCalendario(mesNumero, anioActual);
+</script>
+</body>
+</html>

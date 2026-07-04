@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<body>
+<div th:fragment="modalReagendar">
+    <div id="modalReagendar" class="modal-overlay hidden">
+        <div class="card modal-reagendar-card fade-in">
+            <div class="modal-reagendar-header">
+                <h3>Reagendar reunión o cita</h3>
+                <button type="button" class="btn-icon" onclick="cerrarModalReagendar()" aria-label="Cerrar">✕</button>
+            </div>
+
+            <p class="modal-reagendar-desc">
+                Selecciona un evento y elige la nueva fecha y hora. Solo aparecen reuniones y citas pendientes.
+            </p>
+
+            <div id="reagendarAlerta" class="alert hidden"></div>
+
+            <div class="form-group">
+                <label class="form-label">Evento a reagendar</label>
+                <select id="reagendarSelect" class="form-control" onchange="onReagendarSelectChange()">
+                    <option value="">Cargando eventos...</option>
+                </select>
+            </div>
+
+            <div class="form-row" style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;">
+                <div class="form-group">
+                    <label class="form-label">Nueva fecha *</label>
+                    <input type="date" id="reagendarFecha" class="form-control"/>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Nueva hora (opcional)</label>
+                    <input type="time" id="reagendarHora" class="form-control"/>
+                    <p class="form-hint">Si no indicas hora, se mantiene la actual.</p>
+                </div>
+            </div>
+
+            <div id="reagendarPreview" class="reagendar-preview hidden"></div>
+
+            <div class="modal-reagendar-actions">
+                <button type="button" class="btn btn-secondary" onclick="cerrarModalReagendar()">Cancelar</button>
+                <button type="button" class="btn btn-primary" id="btnConfirmarReagendar" onclick="confirmarReagendar()">
+                    Confirmar reagendamiento
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script th:fragment="reagendarScripts">
+    let reagendablesCache = [];
+
+    function abrirModalReagendar(actividadIdPreseleccionada) {
+        const modal = document.getElementById('modalReagendar');
+        if (!modal) return;
+        modal.classList.remove('hidden');
+        modal.style.display = 'flex';
+        ocultarAlertaReagendar();
+        cargarReagendables(actividadIdPreseleccionada);
+    }
+
+    function cerrarModalReagendar() {
+        const modal = document.getElementById('modalReagendar');
+        if (modal) {
+            modal.classList.add('hidden');
+            modal.style.display = 'none';
+        }
+    }
+
+    async function cargarReagendables(preseleccionId) {
+        const select = document.getElementById('reagendarSelect');
+        if (!select) return;
+        select.innerHTML = '<option value="">Cargando...</option>';
+
+        try {
+            const res = await fetch('/actividades/api/reagendables');
+            reagendablesCache = res.ok ? await res.json() : [];
+
+            if (!reagendablesCache.length) {
+                select.innerHTML = '<option value="">No hay reuniones o citas pendientes</option>';
+                return;
+            }
+
+            select.innerHTML = '<option value="">— Selecciona un evento —</option>' +
+                reagendablesCache.map(a =>
+                    `<option value="${a.id}">${a.etiqueta}</option>`
+                ).join('');
+
+            if (preseleccionId) {
+                select.value = String(preseleccionId);
+                onReagendarSelectChange();
+            }
+        } catch (e) {
+            select.innerHTML = '<option value="">Error al cargar eventos</option>';
+        }
+    }
+
+    function onReagendarSelectChange() {
+        const id = document.getElementById('reagendarSelect')?.value;
+        const item = reagendablesCache.find(a => String(a.id) === String(id));
+        const fechaInput = document.getElementById('reagendarFecha');
+        const horaInput = document.getElementById('reagendarHora');
+        const preview = document.getElementById('reagendarPreview');
+
+        if (!item) {
+            preview?.classList.add('hidden');
+            return;
+        }
+
+        if (fechaInput && item.fechaInicio) fechaInput.value = item.fechaInicio;
+        if (horaInput && item.horaInicio) horaInput.value = item.horaInicio.substring(0, 5);
+
+        if (preview) {
+            preview.classList.remove('hidden');
+            preview.innerHTML = `<strong>Actual:</strong> ${item.etiqueta}`;
+        }
+    }
+
+    function mostrarAlertaReagendar(tipo, mensaje) {
+        const el = document.getElementById('reagendarAlerta');
+        if (!el) return;
+        el.className = 'alert alert-' + tipo;
+        el.innerHTML = '<span>' + (tipo === 'success' ? '✅' : '⚠️') + '</span><span>' + mensaje + '</span>';
+        el.classList.remove('hidden');
+    }
+
+    function ocultarAlertaReagendar() {
+        document.getElementById('reagendarAlerta')?.classList.add('hidden');
+    }
+
+    async function confirmarReagendar() {
+        const id = document.getElementById('reagendarSelect')?.value;
+        const fecha = document.getElementById('reagendarFecha')?.value;
+        const hora = document.getElementById('reagendarHora')?.value;
+        const btn = document.getElementById('btnConfirmarReagendar');
+
+        if (!id) {
+            mostrarAlertaReagendar('warning', 'Selecciona un evento para reagendar.');
+            return;
+        }
+        if (!fecha) {
+            mostrarAlertaReagendar('warning', 'Indica la nueva fecha.');
+            return;
+        }
+
+        if (btn) {
+            btn.disabled = true;
+            btn.textContent = 'Guardando...';
+        }
+        ocultarAlertaReagendar();
+
+        try {
+            const body = new URLSearchParams({ nuevaFecha: fecha });
+            if (hora) body.append('nuevaHora', hora);
+            const res = await fetch('/actividades/api/reagendar/' + id, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body: body.toString()
+            });
+            const data = await res.json();
+
+            if (data.ok) {
+                mostrarAlertaReagendar('success', data.mensaje);
+                setTimeout(() => {
+                    cerrarModalReagendar();
+                    window.location.reload();
+                }, 1200);
+            } else {
+                mostrarAlertaReagendar('danger', data.mensaje || 'No se pudo reagendar');
+            }
+        } catch (e) {
+            mostrarAlertaReagendar('danger', 'Error de red. Intenta de nuevo.');
+        } finally {
+            if (btn) {
+                btn.disabled = false;
+                btn.textContent = 'Confirmar reagendamiento';
+            }
+        }
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+        const modal = document.getElementById('modalReagendar');
+        if (modal) {
+            modal.addEventListener('click', e => {
+                if (e.target === modal) cerrarModalReagendar();
+            });
+        }
+        const hoy = new Date().toISOString().split('T')[0];
+        const fechaInput = document.getElementById('reagendarFecha');
+        if (fechaInput) fechaInput.min = hoy;
+    });
+</script>
+</body>
+</html>

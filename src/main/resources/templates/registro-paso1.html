@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" data-theme="dark">
+<head>
+    <meta charset="UTF-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1"/>
+    <title>Crear cuenta — Paso 1</title>
+    <link rel="stylesheet" th:href="@{/css/app.css}"/>
+</head>
+<body class="auth-page-body auth-register-body">
+
+<div th:replace="~{fragments/auth-common :: authBackground}"></div>
+<header th:replace="~{fragments/auth-common :: authTopbar}"></header>
+
+<div class="auth-page-content auth-register-content">
+    <div class="auth-split-card auth-register-card fade-in">
+        <div class="auth-float-brand">
+            <h2>Event Organizer UCE</h2>
+            <p>Crea tu cuenta en 3 pasos</p>
+        </div>
+
+        <p class="steps-label">Paso 1 de 3 — Datos de acceso</p>
+        <div class="steps-header">
+            <div class="step-segment done"></div>
+            <div class="step-segment"></div>
+            <div class="step-segment"></div>
+        </div>
+
+        <h2 class="auth-register-heading">Datos de acceso</h2>
+        <p class="auth-register-sub">Solo se aceptan correos <strong>@uce.edu.ec</strong></p>
+
+        <div th:if="${error}" class="alert alert-danger"><span th:text="${error}"></span></div>
+
+        <form th:action="@{/registro/paso1}" method="post" class="auth-form">
+            <div class="form-group">
+                <label class="form-label">Nombre completo</label>
+                <input type="text" name="nombre" class="form-control auth-input-lg"
+                       placeholder="Ej: María Tipán Pazmiño" required/>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Correo institucional UCE</label>
+                <input type="email" name="correo" class="form-control auth-input-lg"
+                       placeholder="ejemplo@uce.edu.ec" required/>
+                <p class="form-hint">Debe terminar en @uce.edu.ec</p>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Contraseña</label>
+                <input type="password" name="contrasena" class="form-control auth-input-lg"
+                       placeholder="Mínimo 8 caracteres" required minlength="8"/>
+            </div>
+            <button type="submit" class="btn btn-primary btn-full btn-lg">Continuar</button>
+        </form>
+
+        <p class="auth-float-footer">¿Ya tienes cuenta? <a th:href="@{/login}">Inicia sesión</a></p>
+    </div>
+</div>
+
+<script th:replace="~{fragments/auth-common :: authThemeScript}"></script>
+</body>
+</html>

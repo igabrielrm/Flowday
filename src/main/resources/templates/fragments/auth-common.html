@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<body>
+
+<!-- Fondo auth compartido (login + registro) -->
+<div th:fragment="authBackground" class="auth-page-bg" aria-hidden="true">
+    <img id="authBgImg" th:src="@{/images/auth-bg-dark.png}" alt="" class="auth-page-bg-img"/>
+    <div class="auth-page-bg-overlay" id="authBgOverlay"></div>
+    <div class="auth-deco-shapes" aria-hidden="true">
+        <span class="auth-shape auth-shape-1"></span>
+        <span class="auth-shape auth-shape-2"></span>
+        <span class="auth-shape auth-shape-3"></span>
+    </div>
+</div>
+
+<div th:fragment="authTopbar" class="auth-topbar">
+    <div class="auth-topbar-brand">
+        <img th:src="@{/images/uce-escudo.png}" alt="UCE" class="auth-topbar-logo"/>
+        <span class="auth-topbar-title">Universidad Central del Ecuador</span>
+    </div>
+    <button type="button" class="btn-icon auth-theme-btn" id="authThemeBtn" onclick="toggleAuthTheme()" aria-label="Cambiar tema">☀️</button>
+</div>
+
+<script th:fragment="authThemeScript">
+(function () {
+    function getTheme() {
+        return localStorage.getItem('theme') ||
+            (matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark');
+    }
+
+    window.applyAuthTheme = function (theme) {
+        document.documentElement.setAttribute('data-theme', theme);
+        const img = document.getElementById('authBgImg');
+        const overlay = document.getElementById('authBgOverlay');
+        const btn = document.getElementById('authThemeBtn');
+        if (img) {
+            img.src = theme === 'light' ? '/images/auth-bg-light.png' : '/images/auth-bg-dark.png';
+        }
+        if (overlay) {
+            overlay.classList.toggle('auth-overlay-light', theme === 'light');
+        }
+        if (btn) btn.textContent = theme === 'dark' ? '☀️' : '🌙';
+    };
+
+    window.toggleAuthTheme = function () {
+        const current = document.documentElement.getAttribute('data-theme') || 'dark';
+        const next = current === 'dark' ? 'light' : 'dark';
+        localStorage.setItem('theme', next);
+        location.reload();
+    };
+
+    applyAuthTheme(getTheme());
+})();
+</script>
+
+</body>
+</html>
