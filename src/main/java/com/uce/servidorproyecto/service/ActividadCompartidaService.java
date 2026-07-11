@@ -64,7 +64,7 @@ public class ActividadCompartidaService {
             notificacionService.crear(companero, "ACTIVIDAD",
                     "Actividad compartida contigo",
                     propietario.getNombre() + " te vinculó a: " + actividad.getTitulo(),
-                    "/actividades");
+                    "/app/activities");
         }
     }
 

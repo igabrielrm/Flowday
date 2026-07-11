@@ -1,8 +1,8 @@
 package com.uce.servidorproyecto.service;
 
-import com.uce.servidorproyecto.model.HorarioClase;
+import com.uce.servidorproyecto.model.BloqueRecurrente;
 import com.uce.servidorproyecto.model.Usuario;
-import com.uce.servidorproyecto.repository.HorarioClaseRepository;
+import com.uce.servidorproyecto.repository.BloqueRecurrenteRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -19,44 +19,44 @@ public class HorarioService {
     public static final int HORA_GRID_FIN = 21;
 
     private static final String[] COLORES = {
-            "#3b82f6", "#a855f7", "#22c55e", "#f59e0b", "#ef4444", "#06b6d4", "#ec4899"
+            "#5082ef", "#a855f7", "#22c55e", "#f59e0b", "#ef4444", "#06b6d4", "#ec4899"
     };
 
     @Autowired
-    private HorarioClaseRepository horarioClaseRepository;
+    private BloqueRecurrenteRepository bloqueRecurrenteRepository;
 
-    public List<HorarioClase> listarPorUsuario(Usuario usuario) {
-        return horarioClaseRepository.findByUsuarioOrderByDiaSemanaAscHoraInicioAsc(usuario);
+    public List<BloqueRecurrente> listarPorUsuario(Usuario usuario) {
+        return bloqueRecurrenteRepository.findByUsuarioOrderByDiaSemanaAscHoraInicioAsc(usuario);
     }
 
-    public Optional<HorarioClase> buscarPorId(Long id) {
-        return horarioClaseRepository.findById(id);
+    public Optional<BloqueRecurrente> buscarPorId(Long id) {
+        return bloqueRecurrenteRepository.findById(id);
     }
 
     @Transactional
-    public HorarioClase guardar(Usuario usuario, HorarioClase datos) {
+    public BloqueRecurrente guardar(Usuario usuario, BloqueRecurrente datos) {
         validar(datos);
         if (hayChoque(usuario, datos, null)) {
-            throw new IllegalArgumentException("Ya tienes otra clase en ese horario");
+            throw new IllegalArgumentException("Ya tienes otro bloque en ese horario");
         }
         datos.setUsuario(usuario);
         if (datos.getColor() == null || datos.getColor().isBlank()) {
             int idx = listarPorUsuario(usuario).size() % COLORES.length;
             datos.setColor(COLORES[idx]);
         }
-        return horarioClaseRepository.save(datos);
+        return bloqueRecurrenteRepository.save(datos);
     }
 
     @Transactional
-    public HorarioClase actualizar(Usuario usuario, Long id, HorarioClase datos) {
-        HorarioClase existente = horarioClaseRepository.findById(id)
-                .orElseThrow(() -> new IllegalArgumentException("Clase no encontrada"));
+    public BloqueRecurrente actualizar(Usuario usuario, Long id, BloqueRecurrente datos) {
+        BloqueRecurrente existente = bloqueRecurrenteRepository.findById(id)
+                .orElseThrow(() -> new IllegalArgumentException("Bloque no encontrado"));
         if (!existente.getUsuario().getId().equals(usuario.getId())) {
-            throw new IllegalArgumentException("No tienes permiso para editar esta clase");
+            throw new IllegalArgumentException("No tienes permiso para editar este bloque");
         }
         validar(datos);
         if (hayChoque(usuario, datos, id)) {
-            throw new IllegalArgumentException("Ya tienes otra clase en ese horario");
+            throw new IllegalArgumentException("Ya tienes otro bloque en ese horario");
         }
         existente.setMateria(datos.getMateria());
         existente.setDiaSemana(datos.getDiaSemana());
@@ -67,46 +67,45 @@ public class HorarioService {
         if (datos.getColor() != null && !datos.getColor().isBlank()) {
             existente.setColor(datos.getColor());
         }
-        return horarioClaseRepository.save(existente);
+        return bloqueRecurrenteRepository.save(existente);
     }
 
     @Transactional
     public void eliminar(Usuario usuario, Long id) {
-        HorarioClase clase = horarioClaseRepository.findById(id)
-                .orElseThrow(() -> new IllegalArgumentException("Clase no encontrada"));
-        if (!clase.getUsuario().getId().equals(usuario.getId())) {
-            throw new IllegalArgumentException("No tienes permiso para eliminar esta clase");
+        BloqueRecurrente bloque = bloqueRecurrenteRepository.findById(id)
+                .orElseThrow(() -> new IllegalArgumentException("Bloque no encontrado"));
+        if (!bloque.getUsuario().getId().equals(usuario.getId())) {
+            throw new IllegalArgumentException("No tienes permiso para eliminar este bloque");
         }
-        horarioClaseRepository.delete(clase);
+        bloqueRecurrenteRepository.delete(bloque);
     }
 
-    /** Clase en curso o que empieza en los próximos minutos (ventana configurable). */
-    public Optional<Map<String, Object>> obtenerAlertaClase(Usuario usuario, int minutosAntes) {
+    public Optional<Map<String, Object>> obtenerAlertaBloque(Usuario usuario, int minutosAntes) {
         int diaHoy = LocalDate.now().getDayOfWeek().getValue();
         LocalTime ahora = LocalTime.now();
         LocalTime limite = ahora.plusMinutes(minutosAntes);
 
-        return horarioClaseRepository.findByUsuarioAndDiaSemana(usuario, diaHoy).stream()
+        return bloqueRecurrenteRepository.findByUsuarioAndDiaSemana(usuario, diaHoy).stream()
                 .filter(c -> {
                     if (c.getHoraInicio() == null || c.getHoraFin() == null) return false;
                     boolean yaEmpezo = !ahora.isBefore(c.getHoraInicio()) && ahora.isBefore(c.getHoraFin());
                     boolean empiezaPronto = !c.getHoraInicio().isBefore(ahora) && !c.getHoraInicio().isAfter(limite);
                     return yaEmpezo || empiezaPronto;
                 })
-                .min(Comparator.comparing(HorarioClase::getHoraInicio))
+                .min(Comparator.comparing(BloqueRecurrente::getHoraInicio))
                 .map(this::toAlertaMap);
     }
 
-    public List<HorarioClase> clasesQueEmpiezanAhora(Usuario usuario, LocalTime ventanaInicio, LocalTime ventanaFin) {
+    public List<BloqueRecurrente> bloquesQueEmpiezanAhora(Usuario usuario, LocalTime ventanaInicio, LocalTime ventanaFin) {
         int dia = LocalDate.now().getDayOfWeek().getValue();
-        return horarioClaseRepository.findByUsuarioAndDiaSemana(usuario, dia).stream()
+        return bloqueRecurrenteRepository.findByUsuarioAndDiaSemana(usuario, dia).stream()
                 .filter(c -> c.getHoraInicio() != null
                         && !c.getHoraInicio().isBefore(ventanaInicio)
                         && !c.getHoraInicio().isAfter(ventanaFin))
                 .toList();
     }
 
-    public Map<String, Object> toMap(HorarioClase c) {
+    public Map<String, Object> toMap(BloqueRecurrente c) {
         Map<String, Object> m = new LinkedHashMap<>();
         m.put("id", c.getId());
         m.put("materia", c.getMateria());
@@ -124,10 +123,9 @@ public class HorarioService {
         return DayOfWeek.of(diaSemana).getDisplayName(java.time.format.TextStyle.FULL, new Locale("es"));
     }
 
-    /** Materias únicas registradas en el horario semanal del usuario. */
     public List<String> listarMateriasDistintas(Usuario usuario) {
         return listarPorUsuario(usuario).stream()
-                .map(HorarioClase::getMateria)
+                .map(BloqueRecurrente::getMateria)
                 .filter(m -> m != null && !m.isBlank())
                 .map(String::trim)
                 .distinct()
@@ -135,7 +133,7 @@ public class HorarioService {
                 .toList();
     }
 
-    private Map<String, Object> toAlertaMap(HorarioClase c) {
+    private Map<String, Object> toAlertaMap(BloqueRecurrente c) {
         Map<String, Object> m = toMap(c);
         LocalTime ahora = LocalTime.now();
         boolean enCurso = c.getHoraInicio() != null && c.getHoraFin() != null
@@ -149,9 +147,9 @@ public class HorarioService {
         return m;
     }
 
-    private void validar(HorarioClase datos) {
+    private void validar(BloqueRecurrente datos) {
         if (datos.getMateria() == null || datos.getMateria().isBlank()) {
-            throw new IllegalArgumentException("La materia es obligatoria");
+            throw new IllegalArgumentException("El título del bloque es obligatorio");
         }
         if (datos.getDiaSemana() == null || datos.getDiaSemana() < 1 || datos.getDiaSemana() > 7) {
             throw new IllegalArgumentException("Día de la semana inválido");
@@ -164,9 +162,9 @@ public class HorarioService {
         }
     }
 
-    private boolean hayChoque(Usuario usuario, HorarioClase datos, Long excluirId) {
-        List<HorarioClase> delDia = horarioClaseRepository.findByUsuarioAndDiaSemana(usuario, datos.getDiaSemana());
-        for (HorarioClase otra : delDia) {
+    private boolean hayChoque(Usuario usuario, BloqueRecurrente datos, Long excluirId) {
+        List<BloqueRecurrente> delDia = bloqueRecurrenteRepository.findByUsuarioAndDiaSemana(usuario, datos.getDiaSemana());
+        for (BloqueRecurrente otra : delDia) {
             if (excluirId != null && excluirId.equals(otra.getId())) continue;
             if (seSolapan(datos.getHoraInicio(), datos.getHoraFin(), otra.getHoraInicio(), otra.getHoraFin())) {
                 return true;

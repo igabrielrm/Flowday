@@ -1,7 +1,9 @@
 package com.uce.servidorproyecto.service;
 
+import com.uce.servidorproyecto.config.AppProperties;
 import com.uce.servidorproyecto.model.Usuario;
 import com.uce.servidorproyecto.repository.UsuarioRepository;
+import com.uce.servidorproyecto.security.SecurityUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -9,17 +11,24 @@ import org.springframework.stereotype.Service;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.Optional;
+import java.util.regex.Pattern;
 
 @Service
 public class UsuarioService {
 
+    private static final Pattern EMAIL_PATTERN = Pattern.compile(
+            "^[A-Za-z0-9+_.-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}$");
+
     @Autowired
     private UsuarioRepository usuarioRepository;
+
+    @Autowired
+    private AppProperties appProperties;
 
     private final BCryptPasswordEncoder encoder = new BCryptPasswordEncoder();
 
     public boolean correoValido(String correo) {
-        return correo != null && correo.endsWith("@uce.edu.ec");
+        return correo != null && EMAIL_PATTERN.matcher(correo.trim()).matches();
     }
 
     public boolean correoExiste(String correo) {
@@ -30,7 +39,7 @@ public class UsuarioService {
         usuario.setContrasena(encoder.encode(usuario.getContrasena()));
         usuario.setFechaRegistro(LocalDateTime.now());
         usuario.setEstado("ACTIVO");
-        usuario.setRol("ESTUDIANTE");
+        usuario.setRol("USER");
         usuario.setTema("dark");
         return usuarioRepository.save(usuario);
     }
@@ -64,10 +73,9 @@ public class UsuarioService {
         return usuarioRepository.findByCorreo(correo);
     }
 
-    /** Verifica correo + teléfono para recuperación. @return null si ok */
     public String verificarRecuperacion(String correo, String telefono) {
         if (correo == null || correo.isBlank()) {
-            return "Ingresa tu correo institucional.";
+            return "Ingresa tu correo electrónico.";
         }
         if (telefono == null || !telefonoValido(telefono.trim())) {
             return "Ingresa tu teléfono registrado (10 dígitos).";
@@ -101,12 +109,11 @@ public class UsuarioService {
         usuarioRepository.deleteById(id);
     }
 
-    public void actualizarPerfil(Long id, String nombre, String carrera, String telefono,
+    public void actualizarPerfil(Long id, String nombre, String telefono,
                                  LocalDate fechaNacimiento, String genero) {
         Usuario u = usuarioRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Usuario no encontrado"));
         u.setNombre(nombre);
-        u.setCarrera(carrera);
         u.setTelefono(telefono);
         u.setFechaNacimiento(fechaNacimiento);
         u.setGenero(genero);
@@ -129,10 +136,9 @@ public class UsuarioService {
         usuarioRepository.save(u);
     }
 
-    /** @return null si ok; mensaje de error si falla */
     public String cambiarContrasena(Long id, String actualPlana, String nuevaPlana) {
-        if (nuevaPlana == null || nuevaPlana.length() < 4) {
-            return "La nueva contraseña debe tener al menos 4 caracteres.";
+        if (!SecurityUtils.isPasswordStrongEnough(nuevaPlana)) {
+            return "La nueva contraseña debe tener al menos " + SecurityUtils.PASSWORD_MIN_LENGTH + " caracteres.";
         }
         Usuario u = usuarioRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Usuario no encontrado"));
@@ -154,7 +160,7 @@ public class UsuarioService {
     public void cambiarRol(Long id) {
         Usuario u = usuarioRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Usuario no encontrado"));
-        u.setRol("ADMIN".equals(u.getRol()) ? "ESTUDIANTE" : "ADMIN");
+        u.setRol("ADMIN".equals(u.getRol()) ? "USER" : "ADMIN");
         usuarioRepository.save(u);
     }
 
@@ -170,20 +176,56 @@ public class UsuarioService {
         return usuarioRepository.countAdmins();
     }
 
-    public long contarEstudiantes() {
-        return usuarioRepository.countEstudiantes();
+    public long contarUsers() {
+        return usuarioRepository.countUsers();
     }
 
     public void crearAdminSiNoExiste() {
-        if (!usuarioRepository.findByCorreo("admin@uce.edu.ec").isPresent()) {
-            Usuario admin = new Usuario();
-            admin.setNombre("Administrador");
-            admin.setCorreo("admin@uce.edu.ec");
-            admin.setContrasena(encoder.encode("admin123"));
-            admin.setRol("ADMIN");
-            admin.setEstado("ACTIVO");
-            admin.setFechaRegistro(LocalDateTime.now());
-            usuarioRepository.save(admin);
+        AppProperties.Admin adminConfig = appProperties.getAdmin();
+        if (!adminConfig.isSeedEnabled()) {
+            return;
         }
+        String email = adminConfig.getSeedEmail();
+        String password = adminConfig.getSeedPassword();
+        if (email == null || email.isBlank() || password == null || password.isBlank()) {
+            return;
+        }
+        if (usuarioRepository.findByCorreo(email.trim()).isPresent()) {
+            return;
+        }
+        Usuario admin = new Usuario();
+        admin.setNombre("Administrador");
+        admin.setCorreo(email.trim());
+        admin.setContrasena(encoder.encode(password));
+        admin.setRol("ADMIN");
+        admin.setEstado("ACTIVO");
+        admin.setFechaRegistro(LocalDateTime.now());
+        usuarioRepository.save(admin);
+    }
+
+    public Usuario resolverOAuth(String email, String nombre) {
+        if (!correoValido(email)) {
+            throw new IllegalStateException("El proveedor OAuth no devolvió un correo válido.");
+        }
+        String correo = email.trim().toLowerCase();
+        Optional<Usuario> existente = usuarioRepository.findByCorreo(correo);
+        if (existente.isPresent()) {
+            Usuario usuario = existente.get();
+            if (!"ACTIVO".equals(usuario.getEstado())) {
+                throw new IllegalStateException("Tu cuenta está inactiva. Contacta soporte.");
+            }
+            if ("ADMIN".equals(usuario.getRol())) {
+                throw new IllegalStateException("Los administradores deben usar el acceso interno.");
+            }
+            usuario.setUltimoAcceso(LocalDateTime.now());
+            return usuarioRepository.save(usuario);
+        }
+
+        Usuario nuevo = new Usuario();
+        nuevo.setCorreo(correo);
+        nuevo.setNombre(nombre != null && !nombre.isBlank() ? nombre.trim() : correo.split("@")[0]);
+        nuevo.setContrasena(encoder.encode(java.util.UUID.randomUUID().toString()));
+        nuevo.setTelefono("");
+        return registrar(nuevo);
     }
 }

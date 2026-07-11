@@ -13,16 +13,20 @@ public class WebConfig implements WebMvcConfigurer {
 
     @Override
     public void addCorsMappings(CorsRegistry registry) {
-        registry.addMapping("/**")
-            .allowedOrigins("*")
-            .allowedMethods("GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS")
-            .allowedHeaders("*")
-            .allowCredentials(false)
-            .maxAge(3600);
+        registry.addMapping("/api/**")
+                .allowedOrigins("http://localhost:5173", "http://127.0.0.1:5173")
+                .allowedMethods("GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS")
+                .allowedHeaders("*")
+                .allowCredentials(true)
+                .maxAge(3600);
     }
 
     @Override
     public void addResourceHandlers(ResourceHandlerRegistry registry) {
+        registry.addResourceHandler("/app/**")
+                .addResourceLocations("classpath:/static/app/")
+                .resourceChain(true);
+
         Path uploadDir = Paths.get("uploads").toAbsolutePath().normalize();
         String uploadPath = uploadDir.toUri().toString();
         registry.addResourceHandler("/uploads/**")

@@ -33,6 +33,12 @@ class ActividadServiceTest {
     @Mock
     private UsuarioActividadRepository usuarioActividadRepository;
 
+    @Mock
+    private ConflictDetectionService conflictDetectionService;
+
+    @Mock
+    private PrioridadActividadService prioridadActividadService;
+
     @InjectMocks
     private ActividadService actividadService;
 
@@ -129,7 +135,7 @@ class ActividadServiceTest {
     void testReagendarActividad() {
         actividad.setTipo("REUNION_GRUPAL");
         when(actividadRepository.findById(1L)).thenReturn(Optional.of(actividad));
-        when(actividadRepository.findByUsuarioAndFechaInicio(any(), any())).thenReturn(List.of());
+        when(conflictDetectionService.tieneConflictos(any(), any(), any(), any(), any())).thenReturn(false);
         when(actividadRepository.save(any(Actividad.class))).thenReturn(actividad);
 
         LocalDate nuevaFecha = LocalDate.now().plusDays(2);

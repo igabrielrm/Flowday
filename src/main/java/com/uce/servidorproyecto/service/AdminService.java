@@ -37,6 +37,9 @@ public class AdminService {
     @Autowired
     private EstresService estresService;
 
+    @Autowired
+    private AgrupacionMetricasService agrupacionMetricasService;
+
     // ===== ESTADÍSTICAS GENERALES =====
     public Map<String, Object> getEstadisticasGenerales() {
         Map<String, Object> stats = new HashMap<>();
@@ -44,7 +47,7 @@ public class AdminService {
         // Usuarios
         stats.put("totalUsuarios", usuarioRepository.count());
         stats.put("usuariosActivos", usuarioRepository.count());
-        stats.put("totalEstudiantes", usuarioRepository.countEstudiantes());
+        stats.put("totalUsers", usuarioRepository.countUsers());
         stats.put("totalAdmins", usuarioRepository.countAdmins());
 
         // Actividades
@@ -88,8 +91,8 @@ public class AdminService {
                     entry.put("id", u.getId());
                     entry.put("nombre", u.getNombre());
                     entry.put("correo", u.getCorreo());
-                    entry.put("rol", u.getRol());
-                    entry.put("carrera", u.getCarrera() != null ? u.getCarrera() : "");
+                    entry.put("rol", u.getRolDisplay());
+                    entry.put("cohorte", agrupacionMetricasService.claveAgrupacion(u));
                     entry.put("totalActividades", actividadRepository.findByUsuario(u).size());
                     long completadas = actividadRepository.findByUsuario(u).stream()
                             .filter(a -> "COMPLETADA".equals(a.getEstado()))
@@ -138,20 +141,20 @@ public class AdminService {
         out.put("totalPomodorosSemana", registroBienestarRepository.countAllByTipoAndFechaAfter("POMODORO", semana));
         out.put("totalPausasSemana", registroBienestarRepository.countAllPausasAfter(semana));
 
-        Map<String, Map<String, Object>> carreras = new LinkedHashMap<>();
-        for (Usuario u : usuarioRepository.findEstudiantesActivos()) {
-            String carrera = (u.getCarrera() != null && !u.getCarrera().isBlank()) ? u.getCarrera() : "Sin carrera";
-            Map<String, Object> agg = carreras.computeIfAbsent(carrera, k -> {
+        Map<String, Map<String, Object>> cohortes = new LinkedHashMap<>();
+        for (Usuario u : usuarioRepository.findUsuariosActivos()) {
+            String cohorte = agrupacionMetricasService.claveAgrupacion(u);
+            Map<String, Object> agg = cohortes.computeIfAbsent(cohorte, k -> {
                 Map<String, Object> m = new HashMap<>();
-                m.put("carrera", carrera);
-                m.put("estudiantes", 0);
+                m.put("cohorte", cohorte);
+                m.put("usuarios", 0);
                 m.put("estresTotal", 0);
                 m.put("estresMax", 0);
                 m.put("pomodoros", 0L);
                 m.put("pausas", 0L);
                 return m;
             });
-            agg.put("estudiantes", (Integer) agg.get("estudiantes") + 1);
+            agg.put("usuarios", (Integer) agg.get("usuarios") + 1);
 
             Map<String, Object> estres = estresService.calcularEstres(u);
             int nivel = estres.get("nivel") != null ? ((Number) estres.get("nivel")).intValue() : 0;
@@ -167,20 +170,20 @@ public class AdminService {
             agg.put("pausas", (Long) agg.get("pausas") + pausas);
         }
 
-        List<Map<String, Object>> cargaPorCarrera = carreras.values().stream()
+        List<Map<String, Object>> cargaPorCohorte = cohortes.values().stream()
                 .peek(m -> {
-                    int est = (Integer) m.get("estudiantes");
+                    int est = (Integer) m.get("usuarios");
                     m.put("estresPromedio", est > 0 ? Math.round((Integer) m.get("estresTotal") / (double) est) : 0);
                     int max = (Integer) m.get("estresMax");
                     m.put("nivelAlerta", max >= 70 ? "ALTO" : max >= 40 ? "MEDIO" : "BAJO");
                     m.put("sugerencia", max >= 70
-                            ? "Evitar programar exámenes masivos esta semana"
-                            : max >= 40 ? "Monitorear carga académica" : "Carga estable");
+                            ? "Evitar programar eventos masivos esta semana"
+                            : max >= 40 ? "Monitorear carga de trabajo" : "Carga estable");
                 })
                 .sorted((a, b) -> Integer.compare((Integer) b.get("estresMax"), (Integer) a.get("estresMax")))
                 .collect(Collectors.toList());
 
-        out.put("cargaPorCarrera", cargaPorCarrera);
+        out.put("cargaPorCohorte", cargaPorCohorte);
         out.put("semanasCriticas", detectarSemanasCriticas());
         return out;
     }

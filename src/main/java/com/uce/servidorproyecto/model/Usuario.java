@@ -22,42 +22,35 @@ public class Usuario {
     private String contrasena;
 
     @Column(nullable = false)
-    private String rol; // ESTUDIANTE o ADMIN
+    private String rol; // USER o ADMIN
 
-    // Datos personales
-    private String carrera;
     private String telefono;
     private LocalDate fechaNacimiento;
     private String genero;
 
-    // Contacto de emergencia
     private String nombreEmergencia;
     private String telefonoEmergencia;
     private String relacionEmergencia;
 
-    // Preferencias
-    private String tema; // "dark" o "light"
+    private String tema;
 
-    // ===== NUEVOS CAMPOS =====
-    private String foto;         // Ruta de la imagen de perfil
-    private String mascotaTipo;  // Tipo de mascota (ej: "gato", "perro", "default")
+    private String foto;
+    private String mascotaTipo;
 
     @Column(nullable = false)
-    private String estado; // ACTIVO o INACTIVO
+    private String estado;
 
     private LocalDateTime fechaRegistro;
     private LocalDateTime ultimoAcceso;
 
-    // Constructor
     public Usuario() {
         this.estado = "ACTIVO";
-        this.rol = "ESTUDIANTE";
+        this.rol = "USER";
         this.tema = "dark";
         this.fechaRegistro = LocalDateTime.now();
-        this.mascotaTipo = "default"; // Valor por defecto
+        this.mascotaTipo = "default";
     }
 
-    // ===== GETTERS Y SETTERS (incluyendo los nuevos) =====
     public Long getId() { return id; }
     public void setId(Long id) { this.id = id; }
 
@@ -72,9 +65,6 @@ public class Usuario {
 
     public String getRol() { return rol; }
     public void setRol(String rol) { this.rol = rol; }
-
-    public String getCarrera() { return carrera; }
-    public void setCarrera(String carrera) { this.carrera = carrera; }
 
     public String getTelefono() { return telefono; }
     public void setTelefono(String telefono) { this.telefono = telefono; }
@@ -111,4 +101,10 @@ public class Usuario {
 
     public LocalDateTime getUltimoAcceso() { return ultimoAcceso; }
     public void setUltimoAcceso(LocalDateTime ultimoAcceso) { this.ultimoAcceso = ultimoAcceso; }
+
+    /** Rol legible en UI (mapea ESTUDIANTE legacy → USER). */
+    public String getRolDisplay() {
+        if ("ESTUDIANTE".equals(rol)) return "USER";
+        return rol;
+    }
 }

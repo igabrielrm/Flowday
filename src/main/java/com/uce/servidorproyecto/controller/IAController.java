@@ -1,10 +1,13 @@
 package com.uce.servidorproyecto.controller;
 
+import com.uce.servidorproyecto.api.ApiAuthHelper;
 import com.uce.servidorproyecto.model.Actividad;
 import com.uce.servidorproyecto.model.Usuario;
 import com.uce.servidorproyecto.service.ActividadService;
+import com.uce.servidorproyecto.service.GroqService;
 import com.uce.servidorproyecto.service.IAService;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.context.request.WebRequest;
 
@@ -23,11 +26,32 @@ public class IAController {
     @Autowired
     private IAService iaService;
 
+    @Autowired
+    private GroqService groqService;
+
+    @Value("${ia.provider:groq}")
+    private String iaProvider;
+
+    @GetMapping("/status")
+    public Map<String, Object> status(WebRequest request) {
+        Usuario usuario = ApiAuthHelper.requireUser(request);
+        if (usuario == null) {
+            return Map.of("ok", false, "error", "No autenticado");
+        }
+        boolean groqReady = groqService.estaConfigurado();
+        return Map.of(
+                "ok", true,
+                "provider", iaProvider,
+                "groqConfigured", groqReady,
+                "ready", groqReady || "auto".equalsIgnoreCase(iaProvider)
+        );
+    }
+
     // ===== REAGENDAR INTELIGENTE =====
     @PostMapping("/reagendar")
     public Map<String, Object> reagendarInteligente(@RequestBody(required = false) Map<String, Object> filtros,
                                                     WebRequest request) {
-        Usuario usuario = (Usuario) request.getAttribute("usuarioLogueado", WebRequest.SCOPE_SESSION);
+        Usuario usuario = ApiAuthHelper.requireUser(request);
         if (usuario == null) {
             return Map.of("error", "Usuario no autenticado");
         }
@@ -55,7 +79,7 @@ public class IAController {
     public Map<String, Object> modoAuxilio(@RequestParam String tema,
                                            @RequestParam(required = false) String tipo,
                                            WebRequest request) {
-        Usuario usuario = (Usuario) request.getAttribute("usuarioLogueado", WebRequest.SCOPE_SESSION);
+        Usuario usuario = ApiAuthHelper.requireUser(request);
         if (usuario == null) {
             return Map.of("error", "Usuario no autenticado");
         }
@@ -66,7 +90,7 @@ public class IAController {
     // ===== DETECTAR BLOQUEO CREATIVO =====
     @PostMapping("/detectar-bloqueo")
     public Map<String, Object> detectarBloqueo(WebRequest request) {
-        Usuario usuario = (Usuario) request.getAttribute("usuarioLogueado", WebRequest.SCOPE_SESSION);
+        Usuario usuario = ApiAuthHelper.requireUser(request);
         if (usuario == null) {
             return Map.of("error", "Usuario no autenticado");
         }
@@ -85,7 +109,7 @@ public class IAController {
     public Map<String, Object> sugerirRecursos(@RequestParam String tema,
                                                @RequestParam(required = false) Integer cantidad,
                                                WebRequest request) {
-        Usuario usuario = (Usuario) request.getAttribute("usuarioLogueado", WebRequest.SCOPE_SESSION);
+        Usuario usuario = ApiAuthHelper.requireUser(request);
         if (usuario == null) {
             return Map.of("error", "Usuario no autenticado");
         }
@@ -96,7 +120,7 @@ public class IAController {
     // ===== SUGERIR PAUSA ACTIVA =====
     @GetMapping("/pausa")
     public Map<String, String> sugerirPausa(WebRequest request) {
-        Usuario usuario = (Usuario) request.getAttribute("usuarioLogueado", WebRequest.SCOPE_SESSION);
+        Usuario usuario = ApiAuthHelper.requireUser(request);
         if (usuario == null) {
             return Map.of("error", "Usuario no autenticado");
         }
@@ -105,25 +129,49 @@ public class IAController {
 
     // ===== CHAT COMPAÑERO VIRTUAL =====
     @PostMapping("/chat")
-    public Map<String, Object> chat(@RequestBody Map<String, String> body, WebRequest request) {
-        Usuario usuario = (Usuario) request.getAttribute("usuarioLogueado", WebRequest.SCOPE_SESSION);
+    public Map<String, Object> chat(@RequestBody Map<String, Object> body, WebRequest request) {
+        Usuario usuario = ApiAuthHelper.requireUser(request);
         if (usuario == null) {
             return Map.of("ok", false, "mensaje", "Sesión expirada");
         }
-        String mensaje = body != null ? body.get("mensaje") : null;
+        String mensaje = body != null && body.get("mensaje") != null ? body.get("mensaje").toString() : null;
         if (mensaje == null || mensaje.isBlank()) {
             return Map.of("ok", false, "mensaje", "Escribe un mensaje");
         }
         if (mensaje.length() > 500) {
             mensaje = mensaje.substring(0, 500);
         }
-        return iaService.chatCompanero(mensaje.trim(), usuario);
+        List<Map<String, String>> historial = extraerHistorialChat(body);
+        return iaService.chatCompanero(mensaje.trim(), usuario, historial);
+    }
+
+    @SuppressWarnings("unchecked")
+    private List<Map<String, String>> extraerHistorialChat(Map<String, Object> body) {
+        if (body == null || !(body.get("historial") instanceof List<?> raw)) {
+            return List.of();
+        }
+        List<Map<String, String>> historial = new ArrayList<>();
+        for (Object item : raw) {
+            if (!(item instanceof Map<?, ?> map)) continue;
+            Object roleObj = map.get("role");
+            Object textObj = map.get("text");
+            if (roleObj == null || textObj == null) continue;
+            String role = roleObj.toString().trim();
+            String text = textObj.toString().trim();
+            if (text.isEmpty() || "loading".equals(role)) continue;
+            if (text.length() > 400) text = text.substring(0, 400);
+            historial.add(Map.of("role", role, "text", text));
+        }
+        if (historial.size() > 12) {
+            return new ArrayList<>(historial.subList(historial.size() - 12, historial.size()));
+        }
+        return historial;
     }
 
     // ===== RECURSOS PARA ACTIVIDAD =====
     @GetMapping("/recursos-actividad/{id}")
     public Map<String, Object> recursosActividad(@PathVariable Long id, WebRequest request) {
-        Usuario usuario = (Usuario) request.getAttribute("usuarioLogueado", WebRequest.SCOPE_SESSION);
+        Usuario usuario = ApiAuthHelper.requireUser(request);
         if (usuario == null) {
             return Map.of("ok", false, "mensaje", "Sesión expirada");
         }
@@ -148,7 +196,7 @@ public class IAController {
     // ===== REAGENDAR EN CRISIS =====
     @PostMapping("/reagendar-crisis")
     public Map<String, Object> reagendarCrisis(WebRequest request) {
-        Usuario usuario = (Usuario) request.getAttribute("usuarioLogueado", WebRequest.SCOPE_SESSION);
+        Usuario usuario = ApiAuthHelper.requireUser(request);
         if (usuario == null) {
             return Map.of("error", "Usuario no autenticado");
         }

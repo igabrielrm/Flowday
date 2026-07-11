@@ -25,45 +25,46 @@ public class ComunidadService {
     @Autowired
     private ConexionRepository conexionRepository;
 
-    // Buscar compañeros
-    public List<Usuario> buscarCompaneros(String query, String carrera) {
+    public List<Usuario> buscarCompaneros(String query) {
         List<Usuario> result;
         if (query != null && !query.isEmpty()) {
-            result = usuarioRepository.buscarPorNombreOCarrera(query);
-        } else if (carrera != null && !carrera.isEmpty()) {
-            result = usuarioRepository.buscarPorCarrera(carrera);
+            result = usuarioRepository.buscarPorNombreOCorreo(query);
         } else {
-            result = usuarioRepository.findEstudiantesActivos();
+            result = usuarioRepository.findUsuariosActivos();
         }
         return result.stream().filter(u -> !"ADMIN".equals(u.getRol())).toList();
     }
 
-    // Calcular compatibilidad (simplificada)
     public Map<Usuario, Integer> calcularCompatibilidad(Usuario usuario) {
         Map<Usuario, Integer> compat = new HashMap<>();
-        List<Usuario> otros = usuarioRepository.findEstudiantesActivos().stream()
+        List<Usuario> otros = usuarioRepository.findUsuariosActivos().stream()
                 .filter(u -> !u.getId().equals(usuario.getId())).toList();
+
+        Set<String> misMaterias = actividadRepository.findByUsuario(usuario).stream()
+                .map(Actividad::getMateria)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
 
         for (Usuario otro : otros) {
             int puntos = 0;
-            if (usuario.getCarrera() != null && usuario.getCarrera().equals(otro.getCarrera())) puntos += 40;
-            // Aquí se pueden añadir más factores como materias en común
+            long materiasComunes = actividadRepository.findByUsuario(otro).stream()
+                    .map(Actividad::getMateria)
+                    .filter(m -> m != null && misMaterias.contains(m))
+                    .distinct()
+                    .count();
+            puntos += (int) Math.min(40, materiasComunes * 10);
             compat.put(otro, Math.min(100, puntos));
         }
         return compat;
     }
 
-    // ===== NUEVO: SUGERIR GRUPOS (para el método getSugerencias) =====
     public List<Usuario> sugerirGrupos(Usuario usuario) {
-        // Por ahora, devuelve los primeros 4 estudiantes activos que no sean el usuario
-        // En el futuro se puede mejorar con algoritmos de afinidad
-        return usuarioRepository.findEstudiantesActivos().stream()
+        return usuarioRepository.findUsuariosActivos().stream()
                 .filter(u -> !u.getId().equals(usuario.getId()))
                 .limit(4)
                 .collect(Collectors.toList());
     }
 
-    // ===== NUEVO: ESTADÍSTICAS DE COMUNIDAD =====
     public Map<String, Object> getEstadisticasComunidad() {
         Map<String, Object> stats = new HashMap<>();
         long totalUsuarios = usuarioRepository.countUsuariosActivos();
@@ -77,7 +78,6 @@ public class ComunidadService {
         return stats;
     }
 
-    // ===== SINCRONÍA DE HORARIOS (Punto 17) =====
     public List<Map<String, Object>> sugerirHorariosSincronizados(Usuario usuario, Long otroUsuarioId) {
         Usuario otro = usuarioRepository.findById(otroUsuarioId).orElse(null);
         if (otro == null) return List.of();
@@ -89,10 +89,10 @@ public class ComunidadService {
         for (int h = 8; h < 18; h++) {
             for (int m = 0; m < 60; m += 30) {
                 LocalTime hora = LocalTime.of(h, m);
-                boolean ocupadoYo = misActividades.stream().anyMatch(a -> 
-                    a.getHoraInicio() != null && a.getHoraInicio().equals(hora));
-                boolean ocupadoEl = susActividades.stream().anyMatch(a -> 
-                    a.getHoraInicio() != null && a.getHoraInicio().equals(hora));
+                boolean ocupadoYo = misActividades.stream().anyMatch(a ->
+                        a.getHoraInicio() != null && a.getHoraInicio().equals(hora));
+                boolean ocupadoEl = susActividades.stream().anyMatch(a ->
+                        a.getHoraInicio() != null && a.getHoraInicio().equals(hora));
                 if (!ocupadoYo && !ocupadoEl) {
                     Map<String, Object> slot = new HashMap<>();
                     slot.put("hora", hora.toString());

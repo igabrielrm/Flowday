@@ -51,10 +51,9 @@ class EndToEndTest {
 
         usuarioPrueba = new Usuario();
         usuarioPrueba.setNombre("Prueba EndToEnd");
-        usuarioPrueba.setCorreo("e2e@uce.edu.ec");
-        usuarioPrueba.setContrasena("password123");
-        usuarioPrueba.setRol("ESTUDIANTE");
-        usuarioPrueba.setCarrera("Ingeniería en Sistemas");
+        usuarioPrueba.setCorreo("e2e@test.flowday.app");
+        usuarioPrueba.setContrasena("password1234");
+        usuarioPrueba.setRol("USER");
         usuarioService.registrar(usuarioPrueba);
 
         actividadPrueba = new Actividad();
@@ -75,7 +74,7 @@ class EndToEndTest {
     void testFlujoCompleto() {
         // 1. AUTENTICACIÓN
         Optional<Usuario> autenticado = usuarioService.autenticar(
-                "e2e@uce.edu.ec", "password123");
+                "e2e@test.flowday.app", "password1234");
         assertThat(autenticado).isPresent();
         Usuario usuario = autenticado.get();
         assertThat(usuario.getNombre()).isEqualTo("Prueba EndToEnd");
@@ -157,7 +156,6 @@ class EndToEndTest {
         usuarioService.actualizarPerfil(
                 usuarioPrueba.getId(),
                 "Nombre Actualizado",
-                "Medicina",
                 "0987654321",
                 LocalDate.of(2000, 1, 1),
                 "Masculino"
@@ -166,7 +164,6 @@ class EndToEndTest {
         Optional<Usuario> actualizado = usuarioService.buscarPorId(usuarioPrueba.getId());
         assertThat(actualizado).isPresent();
         assertThat(actualizado.get().getNombre()).isEqualTo("Nombre Actualizado");
-        assertThat(actualizado.get().getCarrera()).isEqualTo("Medicina");
         assertThat(actualizado.get().getTelefono()).isEqualTo("0987654321");
     }
 

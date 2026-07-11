@@ -6,13 +6,16 @@ import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.servlet.http.HttpSession;
-import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
 import java.time.LocalDateTime;
 
-@Component
+/**
+ * @deprecated Reemplazado por Spring Security ({@link com.uce.servidorproyecto.config.SecurityConfig})
+ * y {@link com.uce.servidorproyecto.security.SessionUsuarioSyncFilter}.
+ */
+@Deprecated
 public class SessionFilter extends OncePerRequestFilter {
 
     private static final String USUARIO_LOGEADO_ATTRIBUTE = "usuarioLogueado";

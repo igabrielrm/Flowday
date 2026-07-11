@@ -1,0 +1,55 @@
+import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import { api, UsuarioDto } from '../api/client';
+import { applyTheme } from '../types/profile';
+
+type AuthContextValue = {
+  user: UsuarioDto | null;
+  loading: boolean;
+  login: (correo: string, contrasena: string) => Promise<string | null>;
+  logout: () => Promise<void>;
+  refresh: () => Promise<void>;
+};
+
+const AuthContext = createContext<AuthContextValue | null>(null);
+
+export function AuthProvider({ children }: { children: React.ReactNode }) {
+  const [user, setUser] = useState<UsuarioDto | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  const refresh = useCallback(async () => {
+    const res = await api.me();
+    const next = res.ok && res.data ? res.data : null;
+    setUser(next);
+    if (next?.tema) applyTheme(next.tema);
+  }, []);
+
+  useEffect(() => {
+    refresh().finally(() => setLoading(false));
+  }, [refresh]);
+
+  const login = useCallback(async (correo: string, contrasena: string) => {
+    const res = await api.login(correo, contrasena);
+    if (!res.ok || !res.data) return res.error || 'Error al iniciar sesión';
+    setUser(res.data);
+    if (res.data.tema) applyTheme(res.data.tema);
+    return null;
+  }, []);
+
+  const logout = useCallback(async () => {
+    await api.logout();
+    setUser(null);
+  }, []);
+
+  const value = useMemo(
+    () => ({ user, loading, login, logout, refresh }),
+    [user, loading, login, logout, refresh],
+  );
+
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+}
+
+export function useAuth() {
+  const ctx = useContext(AuthContext);
+  if (!ctx) throw new Error('useAuth debe usarse dentro de AuthProvider');
+  return ctx;
+}

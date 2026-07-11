@@ -38,4 +38,9 @@ public interface RegistroBienestarRepository extends JpaRepository<RegistroBiene
 
     @Query("SELECT COUNT(r) FROM RegistroBienestar r WHERE r.tipo LIKE 'PAUSA_%' AND r.fecha >= :fecha")
     long countAllPausasAfter(@Param("fecha") LocalDateTime fecha);
+
+    @Query("SELECT COUNT(r) FROM RegistroBienestar r WHERE r.usuario = :usuario AND r.tipo LIKE 'PAUSA_%' AND r.fecha >= :fecha")
+    long countPausasByUsuarioSince(
+            @Param("usuario") Usuario usuario,
+            @Param("fecha") LocalDateTime fecha);
 }

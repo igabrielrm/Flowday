@@ -25,6 +25,9 @@ public class NotificacionService {
     @Autowired
     private UsuarioRepository usuarioRepository;
 
+    @Autowired
+    private NotificationPushService notificationPushService;
+
     public Notificacion crear(Usuario destinatario, String tipo, String titulo, String mensaje, String enlace) {
         Notificacion n = new Notificacion();
         n.setUsuario(destinatario);
@@ -32,7 +35,9 @@ public class NotificacionService {
         n.setTitulo(titulo);
         n.setMensaje(mensaje);
         n.setEnlace(enlace);
-        return notificacionRepository.save(n);
+        Notificacion saved = notificacionRepository.save(n);
+        pushRealtime(destinatario, saved);
+        return saved;
     }
 
     public Notificacion crearSiNoExisteHoy(Usuario destinatario, String tipo, String titulo,
@@ -48,21 +53,46 @@ public class NotificacionService {
         n.setTitulo(titulo);
         n.setMensaje(claveDedupe != null ? "[" + claveDedupe + "] " + mensaje : mensaje);
         n.setEnlace(enlace);
-        return notificacionRepository.save(n);
+        Notificacion saved = notificacionRepository.save(n);
+        pushRealtime(destinatario, saved);
+        return saved;
+    }
+
+    private void pushRealtime(Usuario destinatario, Notificacion saved) {
+        if (destinatario == null || destinatario.getId() == null) {
+            return;
+        }
+        Map<String, Object> payload = toMap(saved);
+        payload.put("noLeidas", contarNoLeidas(destinatario));
+        notificationPushService.pushToUser(destinatario.getId(), payload);
     }
 
     public void notificarConexion(Usuario destinatario, Usuario quienConecto) {
         crear(destinatario, "CONEXION",
                 "Nueva conexión",
                 quienConecto.getNombre() + " se conectó contigo. ¡Ahora pueden colaborar en actividades!",
-                "/comunidad");
+                "/app/community");
+    }
+
+    public void notificarSolicitudAmistad(Usuario destinatario, Usuario solicitante) {
+        crear(destinatario, "SOLICITUD_AMISTAD",
+                "Solicitud de amistad",
+                solicitante.getNombre() + " quiere conectarse contigo.",
+                "/app/community");
+    }
+
+    public void notificarConexionAceptada(Usuario destinatario, Usuario quienAcepto) {
+        crear(destinatario, "CONEXION",
+                "Solicitud aceptada",
+                quienAcepto.getNombre() + " aceptó tu solicitud. ¡Ya pueden colaborar!",
+                "/app/community");
     }
 
     @Transactional
     public void notificarAnuncioGlobal(Anuncio anuncio) {
         if (anuncio == null) return;
 
-        String titulo = "Comunicado UCE: " + anuncio.getTitulo();
+        String titulo = "Comunicado Flowday: " + anuncio.getTitulo();
         StringBuilder mensaje = new StringBuilder();
         if (anuncio.getDescripcion() != null && !anuncio.getDescripcion().isBlank()) {
             String desc = anuncio.getDescripcion().trim();
@@ -73,11 +103,11 @@ public class NotificacionService {
             mensaje.append("Fecha límite: ").append(anuncio.getFechaLimite());
         }
         if (mensaje.length() == 0) {
-            mensaje.append("Nuevo comunicado institucional publicado.");
+            mensaje.append("Nuevo comunicado publicado.");
         }
 
-        for (Usuario estudiante : usuarioRepository.findEstudiantesActivos()) {
-            crear(estudiante, "ANUNCIO", titulo, mensaje.toString(), "anuncio:" + anuncio.getId());
+        for (Usuario usuario : usuarioRepository.findUsuariosActivos()) {
+            crear(usuario, "ANUNCIO", titulo, mensaje.toString(), "anuncio:" + anuncio.getId());
         }
     }
 
@@ -100,6 +130,17 @@ public class NotificacionService {
     @Transactional
     public int marcarTodasLeidas(Usuario usuario) {
         return notificacionRepository.marcarTodasLeidas(usuario);
+    }
+
+    @Transactional
+    public boolean eliminar(Long id, Usuario usuario) {
+        return notificacionRepository.findById(id)
+                .filter(n -> n.getUsuario().getId().equals(usuario.getId()))
+                .map(n -> {
+                    notificacionRepository.delete(n);
+                    return true;
+                })
+                .orElse(false);
     }
 
     private Map<String, Object> toMap(Notificacion n) {

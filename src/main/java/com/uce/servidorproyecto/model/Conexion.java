@@ -28,7 +28,7 @@ public class Conexion {
     private LocalDateTime fechaSolicitud;
 
     public Conexion() {
-        this.estado = "ACEPTADA";
+        this.estado = "PENDIENTE";
         this.fechaSolicitud = LocalDateTime.now();
     }
 

@@ -25,6 +25,12 @@ public class ActividadService {
     @Autowired
     private UsuarioActividadRepository usuarioActividadRepository;
 
+    @Autowired
+    private ConflictDetectionService conflictDetectionService;
+
+    @Autowired
+    private PrioridadActividadService prioridadActividadService;
+
     // ===== LISTAR =====
     public List<Actividad> listarPorUsuario(Usuario usuario) {
         List<Actividad> propias = actividadRepository.findByUsuario(usuario);
@@ -43,6 +49,7 @@ public class ActividadService {
 
     // ===== CRUD =====
     public void guardar(Actividad actividad) {
+        prioridadActividadService.aplicarPeso(actividad);
         actividadRepository.save(actividad);
     }
 
@@ -61,39 +68,10 @@ public class ActividadService {
         actividadRepository.delete(actividad);
     }
 
-    // ===== DETECCIÓN DE CHOQUES - FILTRADO EN JAVA (COMPATIBLE CON TODAS LAS BASES DE DATOS) =====
+    // ===== DETECCIÓN DE CHOQUES - delegada a ConflictDetectionService =====
     public boolean hayChoque(Usuario usuario, LocalDate fecha,
                               LocalTime horaInicio, Integer duracionMin, Long idExcluir) {
-        if (horaInicio == null || duracionMin == null) return false;
-
-        // Calcular hora de fin
-        LocalTime horaFin = horaInicio.plusMinutes(duracionMin);
-
-        // Obtener todas las actividades del usuario en esa fecha
-        List<Actividad> actividadesDelDia = actividadRepository
-                .findByUsuarioAndFechaInicio(usuario, fecha);
-
-        // Filtrar en Java para detectar choques
-        for (Actividad a : actividadesDelDia) {
-            // Saltar la actividad que se está editando (si tiene ID)
-            if (idExcluir != null && a.getId().equals(idExcluir)) {
-                continue;
-            }
-
-            // Si la actividad no tiene hora o duración, no se considera
-            if (a.getHoraInicio() == null || a.getDuracionMinutos() == null) {
-                continue;
-            }
-
-            LocalTime inicioExistente = a.getHoraInicio();
-            LocalTime finExistente = inicioExistente.plusMinutes(a.getDuracionMinutos());
-
-            // Detectar superposición: (inicioExistente < horaFin && finExistente > horaInicio)
-            if (inicioExistente.isBefore(horaFin) && finExistente.isAfter(horaInicio)) {
-                return true; // Hay choque
-            }
-        }
-        return false; // No hay choque
+        return conflictDetectionService.tieneConflictos(usuario, fecha, horaInicio, duracionMin, idExcluir);
     }
 
     // ===== BIENESTAR =====
@@ -296,6 +274,15 @@ public class ActividadService {
                     if (b.getHoraInicio() == null) return -1;
                     return a.getHoraInicio().compareTo(b.getHoraInicio());
                 })
+                .toList();
+    }
+
+    public List<Actividad> listarPorMes(Usuario usuario, int year, int month) {
+        LocalDate inicio = LocalDate.of(year, month, 1);
+        LocalDate fin = inicio.withDayOfMonth(inicio.lengthOfMonth());
+        return listarPorUsuario(usuario).stream()
+                .filter(a -> a.getFechaInicio() != null)
+                .filter(a -> !a.getFechaInicio().isBefore(inicio) && !a.getFechaInicio().isAfter(fin))
                 .toList();
     }
 

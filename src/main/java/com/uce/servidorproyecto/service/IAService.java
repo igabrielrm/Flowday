@@ -5,6 +5,8 @@ import com.uce.servidorproyecto.model.Usuario;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
 import java.time.LocalTime;
 import java.util.*;
@@ -145,48 +147,10 @@ public class IAService {
         recursos.put("tema", tema);
         recursos.put("tipo", tipo != null ? tipo : "general");
 
-        List<Map<String, String>> items = new ArrayList<>();
-        switch (tema.toLowerCase()) {
-            case "matemáticas":
-            case "matematicas":
-                items.add(Map.of("titulo", "📚 Guía de Álgebra Lineal", "url", "https://www.khanacademy.org/math/algebra"));
-                items.add(Map.of("titulo", "🎥 Video: Derivadas e Integrales", "url", "https://www.youtube.com/playlist?list=PL..."));
-                items.add(Map.of("titulo", "📝 Ejercicios prácticos de cálculo", "url", "#"));
-                items.add(Map.of("titulo", "📱 App: Wolfram Alpha para resolver problemas", "url", "https://www.wolframalpha.com/"));
-                break;
-            case "programación":
-            case "programacion":
-                items.add(Map.of("titulo", "📚 Guía de Java para principiantes", "url", "https://www.w3schools.com/java/"));
-                items.add(Map.of("titulo", "🎥 Curso completo de Spring Boot", "url", "https://www.youtube.com/playlist?list=PL..."));
-                items.add(Map.of("titulo", "💻 Ejercicios de práctica en LeetCode", "url", "https://leetcode.com/"));
-                items.add(Map.of("titulo", "🤝 Grupo de estudio de programación", "url", "#"));
-                break;
-            case "física":
-            case "fisica":
-                items.add(Map.of("titulo", "📚 Física para universitarios", "url", "#"));
-                items.add(Map.of("titulo", "🎥 Demostraciones de física", "url", "https://www.youtube.com/results?search_query=fisica"));
-                items.add(Map.of("titulo", "📝 Problemas resueltos de mecánica", "url", "#"));
-                break;
-            case "motivación":
-            case "motivacion":
-                items.add(Map.of("titulo", "🔥 5 tips para mantener la motivación", "url", "#"));
-                items.add(Map.of("titulo", "🧘 Meditación guiada para estudiantes", "url", "https://www.youtube.com/results?search_query=meditacion+estudiantes"));
-                items.add(Map.of("titulo", "📚 Cómo estudiar de manera efectiva", "url", "#"));
-                break;
-            case "inglés":
-            case "ingles":
-                items.add(Map.of("titulo", "📚 Gramática básica de inglés", "url", "https://www.duolingo.com/"));
-                items.add(Map.of("titulo", "🎥 Videos para aprender inglés", "url", "https://www.youtube.com/results?search_query=aprender+ingles"));
-                items.add(Map.of("titulo", "📝 Ejercicios de vocabulario", "url", "#"));
-                break;
-            default:
-                items.add(Map.of("titulo", "📚 Recursos generales de estudio", "url", "#"));
-                items.add(Map.of("titulo", "🎥 Videos educativos recomendados", "url", "https://www.youtube.com/edu"));
-                items.add(Map.of("titulo", "📝 Técnicas de estudio efectivas", "url", "#"));
-                items.add(Map.of("titulo", "🧠 Ejercicios para mejorar la concentración", "url", "#"));
-        }
+        String consulta = construirConsultaRecursos(tema, null, tipo);
+        List<Map<String, String>> items = recursosBusquedaValidos(consulta);
         recursos.put("recursos", items);
-        recursos.put("mensaje", "📌 Recursos recomendados para el tema: " + tema);
+        recursos.put("mensaje", "Recursos de búsqueda para: " + tema);
         return recursos;
     }
 
@@ -236,26 +200,30 @@ public class IAService {
     }
 
     // ===== CHAT COMPAÑERO VIRTUAL =====
-    public Map<String, Object> chatCompanero(String mensaje, Usuario usuario) {
+    public Map<String, Object> chatCompanero(String mensaje, Usuario usuario, List<Map<String, String>> historial) {
         Map<String, Object> resultado = new LinkedHashMap<>();
-        String nombre = usuario.getNombre() != null ? usuario.getNombre() : "estudiante";
-        String carrera = usuario.getCarrera() != null ? usuario.getCarrera() : "universidad";
+        String nombre = usuario.getNombre() != null ? usuario.getNombre() : "usuario";
+        String contexto = construirContextoChat(historial);
 
         String prompt = """
-            Eres un compañero virtual académico amigable para estudiantes de la Universidad Central del Ecuador (UCE).
-            Responde en español, con tono cercano y motivador. Máximo 3 párrafos cortos.
-            Estudiante: %s (%s).
-            Pregunta: %s
-            """.formatted(nombre, carrera, mensaje);
+            Eres un asistente de productividad personal de Flowday. Responde en español, tono cercano y útil.
+            REGLAS:
+            - Entre 300 y 700 caracteres (2-4 oraciones claras).
+            - Mantén coherencia con la conversación previa; no repitas saludos si ya conversaron.
+            - Responde directamente al último mensaje considerando el contexto.
+            Usuario: %s.
+            %s
+            Nuevo mensaje del usuario: %s
+            """.formatted(nombre, contexto, mensaje);
 
         try {
             String respuesta = iaProvider.consultar(prompt);
             resultado.put("ok", true);
-            resultado.put("respuesta", respuesta.trim());
+            resultado.put("respuesta", ajustarLongitudRespuestaChat(respuesta.trim()));
             resultado.put("ia", true);
         } catch (Exception e) {
             resultado.put("ok", true);
-            resultado.put("respuesta", respuestaChatFallback(mensaje));
+            resultado.put("respuesta", respuestaChatFallback(mensaje, historial));
             resultado.put("ia", false);
             resultado.put("fallback", true);
         }
@@ -271,23 +239,32 @@ public class IAService {
         String desc = actividad.getDescripcion() != null ? actividad.getDescripcion() : "";
         String tipo = actividad.getTipo() != null ? actividad.getTipo() : "general";
 
+        String consulta = construirConsultaRecursos(tema, actividad.getTitulo(), tipo);
+
         String prompt = """
-            Recomienda exactamente 4 recursos educativos en línea para ayudar a un estudiante universitario con esta tarea.
+            Sugiere 4 recursos educativos en línea para esta tarea universitaria.
             Tema/materia: %s
             Título: %s
             Tipo: %s
             Descripción: %s
 
-            Responde SOLO con un JSON array válido, sin markdown, con este formato:
-            [{"titulo":"nombre del recurso","url":"https://..."}]
-            Usa URLs reales de sitios educativos conocidos (Khan Academy, YouTube, Coursera, documentación oficial, etc.).
+            Responde SOLO JSON array válido (sin markdown):
+            [{"titulo":"nombre breve","url":"https://..."}]
+
+            Preferencia de URLs (siempre funcionan):
+            - YouTube búsqueda: https://www.youtube.com/results?search_query=TEMA
+            - Khan Academy búsqueda: https://www.khanacademy.org/search?page_search_query=TEMA
+            - Google Scholar: https://scholar.google.com/scholar?q=TEMA
+            - Wikipedia búsqueda en español
+            NO uses Coursera, Udemy, edX, Platzi, LinkedIn Learning ni plataformas de pago.
+            Codifica espacios como + o %%20. No uses URLs inventadas ni placeholders.
             """.formatted(tema, actividad.getTitulo(), tipo, desc);
 
         try {
             String respuesta = iaProvider.consultar(prompt);
-            List<Map<String, String>> recursos = parsearRecursosJson(respuesta);
+            List<Map<String, String>> recursos = validarYNormalizarRecursos(parsearRecursosJson(respuesta), consulta);
             if (recursos.isEmpty()) {
-                recursos = recursosFallbackActividad(tema, tipo);
+                recursos = recursosBusquedaValidos(consulta);
                 resultado.put("ia", false);
             } else {
                 resultado.put("ia", true);
@@ -299,7 +276,7 @@ public class IAService {
         } catch (Exception e) {
             resultado.put("ok", true);
             resultado.put("tema", tema);
-            resultado.put("recursos", recursosFallbackActividad(tema, tipo));
+            resultado.put("recursos", recursosBusquedaValidos(consulta));
             resultado.put("mensaje", "Recursos sugeridos (modo offline)");
             resultado.put("ia", false);
             resultado.put("fallback", true);
@@ -307,18 +284,163 @@ public class IAService {
         return resultado;
     }
 
-    private String respuestaChatFallback(String mensaje) {
+    private String respuestaChatFallback(String mensaje, List<Map<String, String>> historial) {
         String lower = mensaje.toLowerCase();
+        boolean hayContexto = historial != null && !historial.isEmpty();
         if (lower.contains("estrés") || lower.contains("estres") || lower.contains("ansiedad")) {
-            return "Entiendo que te sientes cargado. Prueba una pausa de 5 minutos: respira profundo, estira y vuelve con una sola tarea pequeña. ¡Un paso a la vez!";
+            return hayContexto
+                    ? "Siguiendo lo que comentabas, prueba una pausa de 5 minutos con respiración 4-4-4. Luego retoma solo una tarea pequeña y concreta; avanzar un poco ya reduce la presión."
+                    : "Cuando sientes mucha carga, una pausa breve ayuda más de lo que parece. Respira profundo un minuto, estira hombros y cuello, y elige una sola tarea pequeña para retomar con calma.";
         }
         if (lower.contains("motiv") || lower.contains("cansad")) {
-            return "Es normal sentirse así. Divide tu meta en bloques de 25 minutos (Pomodoro) y celebra cada avance. Tú puedes con esto 💪";
+            return hayContexto
+                    ? "Entiendo que cuesta seguir. Divide lo que queda en un bloque de 25 minutos (Pomodoro), sin exigirte perfección. Al terminar ese bloque, reconoce el avance aunque sea mínimo."
+                    : "Es normal perder impulso a mitad del semestre. Usa un Pomodoro de 25 minutos con una meta muy concreta y descansa 5 minutos después. La constancia en bloques cortos suele funcionar mejor que estudiar horas enteras agotado.";
         }
         if (lower.contains("estudi") || lower.contains("examen")) {
-            return "Para estudiar mejor: repasa lo más difícil primero, haz un resumen corto y practica con ejercicios. ¿Quieres que te sugiera recursos para alguna materia?";
+            return hayContexto
+                    ? "Retomando tu tema: repasa primero lo más difícil mientras estás fresco, haz un mapa mental de 5 ideas clave y busca un video corto en YouTube que explique el concepto que te bloquea."
+                    : "Para estudiar mejor, empieza por lo que más te cuesta, resume en tus propias palabras y practica con 2-3 ejercicios. Si te atoras, un video breve del tema en YouTube puede destrabar la idea principal.";
         }
-        return "¡Hola! Soy tu compañero virtual. Puedo ayudarte con consejos de estudio, organización y bienestar académico. ¿En qué te ayudo hoy?";
+        return hayContexto
+                ? "Te leo. Cuéntame un poco más sobre lo que necesitas ahora — organización, estudio, estrés o planificación — y lo vemos paso a paso."
+                : "Hola, soy tu compañero virtual. Puedo ayudarte con organización, técnicas de estudio, manejo del estrés y planificación de tareas. ¿Qué te gustaría trabajar hoy?";
+    }
+
+    private String construirContextoChat(List<Map<String, String>> historial) {
+        if (historial == null || historial.isEmpty()) {
+            return "";
+        }
+        StringBuilder sb = new StringBuilder("Conversación reciente:\n");
+        for (Map<String, String> msg : historial) {
+            String role = msg.getOrDefault("role", "");
+            String text = msg.getOrDefault("text", "");
+            if (text.isBlank()) continue;
+            if ("user".equals(role)) {
+                sb.append("Estudiante: ").append(text).append('\n');
+            } else if ("bot".equals(role)) {
+                sb.append("Tú: ").append(text).append('\n');
+            }
+        }
+        sb.append('\n');
+        return sb.toString();
+    }
+
+    private String ajustarLongitudRespuestaChat(String texto) {
+        if (texto == null) return "";
+        String limpio = texto.replaceAll("\\s+", " ").trim();
+        if (limpio.length() > 700) {
+            int corte = limpio.lastIndexOf('.', 700);
+            if (corte < 450) corte = limpio.lastIndexOf(' ', 680);
+            if (corte < 450) corte = 700;
+            limpio = limpio.substring(0, corte).trim() + "…";
+        }
+        return limpio;
+    }
+
+    private String construirConsultaRecursos(String tema, String titulo, String tipo) {
+        StringBuilder sb = new StringBuilder();
+        if (tema != null && !tema.isBlank()) sb.append(tema.trim());
+        if (titulo != null && !titulo.isBlank()) {
+            if (!sb.isEmpty()) sb.append(' ');
+            sb.append(titulo.trim());
+        }
+        if (tipo != null && !tipo.isBlank()) {
+            String t = tipo.toLowerCase();
+            if (t.contains("examen") || t.contains("evaluacion") || t.contains("prueba")) {
+                sb.append(" preparación examen");
+            } else if (t.contains("tarea") || t.contains("deber") || t.contains("entrega")) {
+                sb.append(" guía tarea universitaria");
+            }
+        }
+        String q = sb.toString().trim();
+        return q.isEmpty() ? "productividad personal" : q;
+    }
+
+    private String urlEncode(String value) {
+        return URLEncoder.encode(value, StandardCharsets.UTF_8).replace("+", "%20");
+    }
+
+    private List<Map<String, String>> recursosBusquedaValidos(String consulta) {
+        String q = consulta == null || consulta.isBlank() ? "estudio universitario" : consulta.trim();
+        List<Map<String, String>> items = new ArrayList<>();
+        items.add(recurso("🎥 YouTube: " + q, "https://www.youtube.com/results?search_query=" + urlEncode(q + " explicación")));
+        items.add(recurso("📚 Khan Academy: " + q, "https://www.khanacademy.org/search?page_search_query=" + urlEncode(q)));
+        items.add(recurso("🔬 Google Scholar: " + q, "https://scholar.google.com/scholar?q=" + urlEncode(q)));
+        items.add(recurso("📖 Wikipedia: " + q, "https://es.wikipedia.org/wiki/Special:Search?search=" + urlEncode(q)));
+        return items;
+    }
+
+    private Map<String, String> recurso(String titulo, String url) {
+        Map<String, String> item = new LinkedHashMap<>();
+        item.put("titulo", titulo);
+        item.put("url", url);
+        return item;
+    }
+
+    private List<Map<String, String>> validarYNormalizarRecursos(List<Map<String, String>> raw, String consulta) {
+        List<Map<String, String>> validos = new ArrayList<>();
+        Set<String> urlsVistas = new HashSet<>();
+
+        for (Map<String, String> r : raw) {
+            String titulo = r.getOrDefault("titulo", "Recurso educativo");
+            String url = normalizarUrlRecurso(r.get("url"), consulta, titulo);
+            if (urlsVistas.add(url)) {
+                validos.add(recurso(titulo, url));
+            }
+            if (validos.size() >= 4) break;
+        }
+
+        if (validos.size() < 4) {
+            for (Map<String, String> fallback : recursosBusquedaValidos(consulta)) {
+                String url = fallback.get("url");
+                if (urlsVistas.add(url)) {
+                    validos.add(fallback);
+                }
+                if (validos.size() >= 4) break;
+            }
+        }
+        return validos;
+    }
+
+    private String normalizarUrlRecurso(String url, String consulta, String titulo) {
+        if (esUrlValida(url) && !esDominioBloqueado(url.toLowerCase())) {
+            if (url.contains("khanacademy.org") && !url.contains("/search")) {
+                return "https://www.khanacademy.org/search?page_search_query=" + urlEncode(consulta);
+            }
+            return url;
+        }
+        if (titulo != null && titulo.toLowerCase().contains("scholar")) {
+            return "https://scholar.google.com/scholar?q=" + urlEncode(consulta);
+        }
+        if (titulo != null && titulo.toLowerCase().contains("khan")) {
+            return "https://www.khanacademy.org/search?page_search_query=" + urlEncode(consulta);
+        }
+        if (titulo != null && titulo.toLowerCase().contains("wikipedia")) {
+            return "https://es.wikipedia.org/wiki/Special:Search?search=" + urlEncode(consulta);
+        }
+        return "https://www.youtube.com/results?search_query=" + urlEncode(consulta + " explicación");
+    }
+
+    private boolean esDominioBloqueado(String urlLower) {
+        return urlLower.contains("coursera.org")
+                || urlLower.contains("udemy.com")
+                || urlLower.contains("edx.org")
+                || urlLower.contains("platzi.com")
+                || urlLower.contains("skillshare.com")
+                || urlLower.contains("linkedin.com/learning")
+                || urlLower.contains("futurelearn.com")
+                || urlLower.contains("domestika.org");
+    }
+
+    private boolean esUrlValida(String url) {
+        if (url == null || url.isBlank() || "#".equals(url.trim())) return false;
+        if (!url.startsWith("http://") && !url.startsWith("https://")) return false;
+        String lower = url.toLowerCase();
+        if (lower.contains("list=pl...") || lower.contains("example.com")) return false;
+        if (lower.endsWith("/...") || lower.contains("placeholder")) return false;
+        if (esDominioBloqueado(lower)) return false;
+        return true;
     }
 
     private List<Map<String, String>> parsearRecursosJson(String respuesta) {
@@ -342,7 +464,7 @@ public class IAService {
                 if (!titulo.isEmpty()) {
                     Map<String, String> item = new LinkedHashMap<>();
                     item.put("titulo", titulo);
-                    item.put("url", url.isEmpty() ? "#" : url);
+                    item.put("url", url);
                     items.add(item);
                 }
             }
@@ -353,19 +475,6 @@ public class IAService {
     }
 
     private List<Map<String, String>> recursosFallbackActividad(String tema, String tipo) {
-        String clave = tema.toLowerCase();
-        if (clave.contains("program") || clave.contains("java") || clave.contains("software")) {
-            return (List<Map<String, String>>) generarRecursosEstudio("programacion", tipo).get("recursos");
-        }
-        if (clave.contains("mat") || clave.contains("calculo") || clave.contains("cálculo")) {
-            return (List<Map<String, String>>) generarRecursosEstudio("matematicas", tipo).get("recursos");
-        }
-        if (clave.contains("fis") || clave.contains("fís")) {
-            return (List<Map<String, String>>) generarRecursosEstudio("fisica", tipo).get("recursos");
-        }
-        if (clave.contains("ingl")) {
-            return (List<Map<String, String>>) generarRecursosEstudio("ingles", tipo).get("recursos");
-        }
-        return (List<Map<String, String>>) generarRecursosEstudio(tema, tipo).get("recursos");
+        return recursosBusquedaValidos(construirConsultaRecursos(tema, null, tipo));
     }
 }

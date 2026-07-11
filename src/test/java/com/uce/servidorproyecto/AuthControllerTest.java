@@ -1,6 +1,7 @@
 package com.uce.servidorproyecto.controller;
 
 import com.uce.servidorproyecto.model.Usuario;
+import com.uce.servidorproyecto.security.SecurityUtils;
 import com.uce.servidorproyecto.service.UsuarioService;
 import jakarta.servlet.http.HttpSession;
 import org.junit.jupiter.api.BeforeEach;
@@ -10,13 +11,13 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.context.ActiveProfiles;
-import org.springframework.ui.Model;
 
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 
 @ActiveProfiles("test")
@@ -29,9 +30,6 @@ class AuthControllerTest {
     @Mock
     private HttpSession session;
 
-    @Mock
-    private Model model;
-
     @InjectMocks
     private AuthController authController;
 
@@ -42,141 +40,62 @@ class AuthControllerTest {
         usuario = new Usuario();
         usuario.setId(1L);
         usuario.setNombre("Juan Pérez");
-        usuario.setCorreo("juan@uce.edu.ec");
+        usuario.setCorreo("juan@example.com");
         usuario.setContrasena("password123");
-        usuario.setRol("ESTUDIANTE");
+        usuario.setRol("USER");
     }
 
     @Test
     void testLoginGet() {
-        String vista = authController.login(null, model);
-        assertThat(vista).isEqualTo("login");
-        verify(model).addAttribute("modoAdmin", false);
+        assertThat(authController.login()).isEqualTo("redirect:/app/login");
     }
 
     @Test
-    void testLoginGetModoAdmin() {
-        String vista = authController.login(true, model);
-        assertThat(vista).isEqualTo("login");
-        verify(model).addAttribute("modoAdmin", true);
-    }
-
-    @Test
-    void testProcesarLoginExitosoEstudiante() {
-        when(usuarioService.autenticar("juan@uce.edu.ec", "password123"))
+    void testProcesarLoginExitosoUsuario() {
+        when(usuarioService.autenticar("juan@example.com", "password123"))
                 .thenReturn(Optional.of(usuario));
 
         String resultado = authController.procesarLogin(
-                "juan@uce.edu.ec", "password123", null, session, model);
+                "juan@example.com", "password123", session);
 
-        assertThat(resultado).isEqualTo("redirect:/dashboard");
-        verify(session, times(1)).setAttribute(anyString(), any());
+        assertThat(resultado).isEqualTo("redirect:/app/");
+        verify(session, atLeastOnce()).setAttribute(anyString(), any());
     }
 
     @Test
-    void testProcesarLoginExitosoAdmin() {
+    void testProcesarLoginRechazaAdmin() {
         usuario.setRol("ADMIN");
-        when(usuarioService.autenticar("admin@uce.edu.ec", "admin123"))
+        when(usuarioService.autenticar("admin@example.com", "admin123"))
                 .thenReturn(Optional.of(usuario));
 
         String resultado = authController.procesarLogin(
-                "admin@uce.edu.ec", "admin123", "true", session, model);
+                "admin@example.com", "admin123", session);
 
-        assertThat(resultado).isEqualTo("redirect:/admin/dashboard");
-        verify(session, times(1)).setAttribute(anyString(), any());
+        assertThat(resultado).isEqualTo("redirect:/internal/login?error=admin");
+        verify(session, never()).setAttribute(eq(SecurityUtils.SESSION_USUARIO), any());
     }
 
     @Test
     void testProcesarLoginFallido() {
-        when(usuarioService.autenticar("juan@uce.edu.ec", "wrong"))
+        when(usuarioService.autenticar("juan@example.com", "wrong"))
                 .thenReturn(Optional.empty());
 
         String resultado = authController.procesarLogin(
-                "juan@uce.edu.ec", "wrong", null, session, model);
+                "juan@example.com", "wrong", session);
 
-        assertThat(resultado).isEqualTo("login");
-        verify(model, times(1)).addAttribute(eq("error"), anyString());
-        verify(model, times(1)).addAttribute("modoAdmin", false);
+        assertThat(resultado).isEqualTo("redirect:/app/login?error=1");
         verify(session, never()).setAttribute(anyString(), any());
     }
 
     @Test
-    void testProcesarLoginAdminSinModoAdmin() {
-        usuario.setRol("ADMIN");
-        when(usuarioService.autenticar("admin@uce.edu.ec", "admin123"))
-                .thenReturn(Optional.of(usuario));
-
-        String resultado = authController.procesarLogin(
-                "admin@uce.edu.ec", "admin123", null, session, model);
-
-        assertThat(resultado).isEqualTo("login");
-        verify(model).addAttribute(eq("error"), anyString());
-        verify(model).addAttribute("modoAdmin", false);
-        verify(session, never()).setAttribute(anyString(), any());
-    }
-
-    @Test
-    void testProcesarLoginEstudianteEnModoAdmin() {
-        when(usuarioService.autenticar("juan@uce.edu.ec", "password123"))
-                .thenReturn(Optional.of(usuario));
-
-        String resultado = authController.procesarLogin(
-                "juan@uce.edu.ec", "password123", "true", session, model);
-
-        assertThat(resultado).isEqualTo("login");
-        verify(model).addAttribute(eq("error"), anyString());
-        verify(model).addAttribute("modoAdmin", true);
-        verify(session, never()).setAttribute(anyString(), any());
-    }
-
-    @Test
-    void testRegistroPaso1() {
-        String vista = authController.registro(model);
-        assertThat(vista).isEqualTo("registro-paso1");
-        verify(model, times(1)).addAttribute(eq("usuario"), any(Usuario.class));
-    }
-
-    @Test
-    void testProcesarPaso1CorreoValido() {
-        when(usuarioService.correoValido("juan@uce.edu.ec")).thenReturn(true);
-        when(usuarioService.correoExiste("juan@uce.edu.ec")).thenReturn(false);
-
-        String resultado = authController.procesarPaso1(
-                "Juan Pérez", "juan@uce.edu.ec", "password123", session, model);
-
-        assertThat(resultado).isEqualTo("redirect:/registro/paso2");
-        verify(session, times(1)).setAttribute(anyString(), any());
-    }
-
-    @Test
-    void testProcesarPaso1CorreoInvalido() {
-        when(usuarioService.correoValido("juan@gmail.com")).thenReturn(false);
-
-        String resultado = authController.procesarPaso1(
-                "Juan Pérez", "juan@gmail.com", "password123", session, model);
-
-        assertThat(resultado).isEqualTo("registro-paso1");
-        verify(model, times(1)).addAttribute(eq("error"), anyString());
-        verify(session, never()).setAttribute(anyString(), any());
-    }
-
-    @Test
-    void testProcesarPaso1CorreoYaExiste() {
-        when(usuarioService.correoValido("juan@uce.edu.ec")).thenReturn(true);
-        when(usuarioService.correoExiste("juan@uce.edu.ec")).thenReturn(true);
-
-        String resultado = authController.procesarPaso1(
-                "Juan Pérez", "juan@uce.edu.ec", "password123", session, model);
-
-        assertThat(resultado).isEqualTo("registro-paso1");
-        verify(model, times(1)).addAttribute(eq("error"), anyString());
-        verify(session, never()).setAttribute(anyString(), any());
+    void testRegistroGet() {
+        assertThat(authController.registro()).isEqualTo("redirect:/app/register");
     }
 
     @Test
     void testLogout() {
         String resultado = authController.logout(session);
-        assertThat(resultado).isEqualTo("redirect:/login");
+        assertThat(resultado).isEqualTo("redirect:/app/login");
         verify(session, times(1)).invalidate();
     }
 }

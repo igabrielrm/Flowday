@@ -55,6 +55,9 @@ public class Actividad {
     private Integer tiempoPomodoro;
     private String color; // Almacena el valor hexadecimal (#22c55e, #3b82f6, etc.)
 
+    /** Peso de prioridad estricta (100=inamovible, 25=baja). Calculado desde tipo al guardar. */
+    private Integer pesoPrioridad;
+
     // ===== CONSTRUCTOR =====
     public Actividad() {
         this.estado = "PENDIENTE";
@@ -108,4 +111,7 @@ public class Actividad {
 
     public String getColor() { return color; }
     public void setColor(String color) { this.color = color; }
+
+    public Integer getPesoPrioridad() { return pesoPrioridad; }
+    public void setPesoPrioridad(Integer pesoPrioridad) { this.pesoPrioridad = pesoPrioridad; }
 }

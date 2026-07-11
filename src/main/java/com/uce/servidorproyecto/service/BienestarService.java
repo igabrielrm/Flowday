@@ -1,5 +1,6 @@
 package com.uce.servidorproyecto.service;
 
+import com.uce.servidorproyecto.api.dto.BienestarSesionDto;
 import com.uce.servidorproyecto.model.RegistroBienestar;
 import com.uce.servidorproyecto.model.Usuario;
 import com.uce.servidorproyecto.repository.RegistroBienestarRepository;
@@ -52,13 +53,14 @@ public class BienestarService {
         // Obtener últimas sesiones
         List<RegistroBienestar> ultimas = registroBienestarRepository
                 .findByUsuarioOrderByFechaDesc(usuario);
-        stats.put("ultimasSesiones", ultimas.stream().limit(10).toList());
+        stats.put("ultimasSesiones", ultimas.stream()
+                .limit(10)
+                .map(BienestarSesionDto::from)
+                .toList());
 
-          // Contar sesiones por tipo
         stats.put("totalPomodoros", registroBienestarRepository.countByUsuarioAndTipoAndFechaAfter(
                 usuario, "POMODORO", inicioSemana));
-        stats.put("totalPausas", registroBienestarRepository.countByUsuarioAndTipoAndFechaAfter(
-                usuario, "PAUSA_ACTIVA", inicioSemana));
+        stats.put("totalPausas", registroBienestarRepository.countPausasByUsuarioSince(usuario, inicioSemana));
 
         return stats;
     }
