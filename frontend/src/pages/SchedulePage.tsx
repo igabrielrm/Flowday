@@ -72,7 +72,7 @@ export default function SchedulePage() {
     <PageStack>
       <PageHeader
         title="Horario"
-        subtitle="Toca una celda vacía para asignar una clase"
+        subtitle="Toca un día o una celda vacía para agregar una clase"
         actions={
           <Button variant="contained" onClick={() => setModal({ mode: 'create' })}>
             + Agregar materia

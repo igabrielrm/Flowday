@@ -183,7 +183,12 @@ export default function ActivitiesPage() {
         ))}
       </Stack>
 
-      <Stack direction="row" flexWrap="wrap" gap={1}>
+      <Stack
+        direction="row"
+        flexWrap="nowrap"
+        gap={1}
+        sx={{ overflowX: 'auto', pb: 0.5, scrollbarWidth: 'none', '&::-webkit-scrollbar': { display: 'none' } }}
+      >
         {(['ALL', 'TODAY', 'TOMORROW', 'WEEK'] as DateFilter[]).map((v) => (
           <Chip
             key={v}
@@ -196,7 +201,12 @@ export default function ActivitiesPage() {
         ))}
       </Stack>
 
-      <Stack direction="row" flexWrap="wrap" gap={1}>
+      <Stack
+        direction="row"
+        flexWrap="nowrap"
+        gap={1}
+        sx={{ overflowX: 'auto', pb: 0.5, scrollbarWidth: 'none', '&::-webkit-scrollbar': { display: 'none' } }}
+      >
         {(['ALL', ...ACTIVITY_STATES.map((s) => s.value)] as const).map((value) => (
           <Chip
             key={value}
@@ -266,7 +276,7 @@ export default function ActivitiesPage() {
                   '&:hover': { bgcolor: 'action.hover' },
                 }}
               >
-                <Stack direction="row" spacing={1.5} alignItems="flex-start">
+                <Stack direction="row" spacing={1} alignItems="flex-start" flexWrap="wrap" useFlexGap>
                   <Box
                     sx={{
                       width: 10,

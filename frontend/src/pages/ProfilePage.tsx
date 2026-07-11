@@ -177,7 +177,7 @@ export default function ProfilePage() {
 
       <Card>
         <CardContent>
-          <Stack direction="row" spacing={2} alignItems="center">
+          <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} alignItems={{ xs: 'flex-start', sm: 'center' }}>
             <Avatar src={avatarUrl || undefined} sx={{ width: 72, height: 72, fontSize: 24 }}>
               {profileInitials(profile.nombre)}
             </Avatar>

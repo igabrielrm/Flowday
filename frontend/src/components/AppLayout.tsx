@@ -146,7 +146,7 @@ export default function AppLayout() {
   );
 
   return (
-    <Box sx={{ display: 'flex', minHeight: '100vh', width: '100%' }}>
+    <Box sx={{ display: 'flex', minHeight: '100dvh', width: '100%' }}>
       <ToastStack />
       <OfflineBanner />
 
@@ -156,14 +156,14 @@ export default function AppLayout() {
         onClose={() => setMobileOpen(false)}
         ModalProps={{ keepMounted: true }}
         sx={{
-          width: DRAWER_WIDTH,
+          width: { xs: 0, md: DRAWER_WIDTH },
           flexShrink: 0,
-          display: { xs: 'block', md: 'block' },
           '& .MuiDrawer-paper': {
             width: DRAWER_WIDTH,
             boxSizing: 'border-box',
             borderRight: 1,
             borderColor: 'divider',
+            pt: { xs: 'env(safe-area-inset-top)', md: 0 },
           },
         }}
       >
@@ -176,17 +176,38 @@ export default function AppLayout() {
           flexGrow: 1,
           width: { md: `calc(100% - ${DRAWER_WIDTH}px)` },
           minWidth: 0,
+          minHeight: '100dvh',
+          display: 'flex',
+          flexDirection: 'column',
           pb: { xs: 'calc(56px + env(safe-area-inset-bottom))', md: 0 },
         }}
       >
-        <AppBar position="sticky" color="transparent" elevation={0} sx={{ borderBottom: 1, borderColor: 'divider' }}>
-          <Toolbar sx={{ gap: 1 }}>
+        <AppBar
+          position="sticky"
+          color="transparent"
+          elevation={0}
+          sx={{
+            borderBottom: 1,
+            borderColor: 'divider',
+            pt: 'env(safe-area-inset-top)',
+          }}
+        >
+          <Toolbar sx={{ gap: 1, minHeight: { xs: 56, sm: 64 } }}>
             {!isDesktop && (
-              <IconButton edge="start" onClick={() => setMobileOpen(true)} aria-label="Abrir menú">
+              <IconButton
+                edge="start"
+                onClick={() => setMobileOpen(true)}
+                aria-label="Abrir menú"
+                sx={{ width: 44, height: 44 }}
+              >
                 <MenuIcon />
               </IconButton>
             )}
-            <Typography variant="body2" color="text.secondary" sx={{ flexGrow: 1, display: { xs: 'none', sm: 'block' } }}>
+            <Typography
+              variant="body2"
+              color="text.secondary"
+              sx={{ flexGrow: 1, display: { xs: 'none', sm: 'block' } }}
+            >
               Plan your day, own your flow.
             </Typography>
             <NotificationsBell />
@@ -196,11 +217,15 @@ export default function AppLayout() {
         <Box
           component="section"
           sx={{
+            flex: 1,
+            minHeight: 0,
+            display: 'flex',
+            flexDirection: 'column',
             width: '100%',
             maxWidth: 1200,
             mx: 'auto',
             px: { xs: 2, sm: 3, md: 4 },
-            py: { xs: 2.5, sm: 3, md: 4 },
+            py: { xs: 2, sm: 3, md: 4 },
           }}
         >
           <Outlet />

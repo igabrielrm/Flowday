@@ -60,11 +60,6 @@ export default function ChatPage() {
   const typingTimerRef = useRef<number | null>(null);
   selectedIdRef.current = selectedId;
 
-  const chatHeight = {
-    xs: 'calc(100dvh - 148px)',
-    md: 'calc(100dvh - 200px)',
-  };
-
   const appendMessage = useCallback((msg: ChatMessage) => {
     setMessages((prev) => (prev.some((m) => m.id === msg.id) ? prev : [...prev, msg]));
   }, []);
@@ -203,20 +198,23 @@ export default function ChatPage() {
   const showPanel = !isMobile || !!selectedId;
 
   return (
-    <PageStack>
+    <PageStack sx={{ flex: 1, minHeight: 0 }}>
       <PageHeader title="Mensajes" subtitle={isMobile ? undefined : 'Chat en tiempo real con tus conexiones'} />
 
       <Stack
         direction={{ xs: 'column', md: 'row' }}
         spacing={2}
-        sx={{ height: chatHeight, maxHeight: chatHeight, minHeight: 360 }}
+        sx={{ flex: 1, minHeight: { xs: 0, md: 560 }, maxHeight: { md: 'calc(100dvh - 220px)' } }}
       >
         {showSidebar && (
           <Card
             sx={{
-              width: { md: 300 },
+              width: { xs: '100%', md: 300 },
               flexShrink: 0,
-              height: '100%',
+              flex: { xs: showPanel ? 0 : 1, md: 'none' },
+              height: { xs: showPanel ? 'auto' : '100%', md: '100%' },
+              minHeight: { xs: showPanel ? 0 : 280, md: 0 },
+              maxHeight: { xs: showPanel ? 0 : '100%', md: 'none' },
               display: 'flex',
               flexDirection: 'column',
               ...glassSurface(theme, { strong: true }),
@@ -298,8 +296,8 @@ export default function ChatPage() {
                 >
                   <Stack direction="row" alignItems="center" spacing={1.5}>
                     {isMobile && (
-                      <IconButton size="small" onClick={() => setSearchParams({})}>
-                        <ArrowBackIcon fontSize="small" />
+                      <IconButton onClick={() => setSearchParams({})} sx={{ width: 44, height: 44 }}>
+                        <ArrowBackIcon />
                       </IconButton>
                     )}
                     <Avatar sx={{ width: 36, height: 36, bgcolor: 'primary.main' }}>
@@ -384,7 +382,7 @@ export default function ChatPage() {
                     borderTop: 1,
                     borderColor: 'divider',
                     bgcolor: 'background.paper',
-                    pb: { xs: 1, md: 1.5 },
+                    pb: { xs: 'max(12px, env(safe-area-inset-bottom))', md: 1.5 },
                   }}
                 >
                   <Stack direction="row" spacing={1} alignItems="flex-end">

@@ -53,7 +53,10 @@ export function createFlowdayTheme(mode: 'light' | 'dark') {
               : 'url(/images/bg-pattern-dark.png)',
             backgroundRepeat: 'repeat',
             backgroundSize: '360px',
-            backgroundAttachment: 'fixed',
+            backgroundAttachment: 'scroll',
+            '@media (min-width: 900px)': {
+              backgroundAttachment: 'fixed',
+            },
             '&::before': {
               content: '""',
               position: 'fixed',
@@ -63,6 +66,16 @@ export function createFlowdayTheme(mode: 'light' | 'dark') {
               background: isLight
                 ? 'linear-gradient(180deg, rgba(255,255,255,0.08) 0%, rgba(241,245,249,0.18) 100%)'
                 : 'linear-gradient(180deg, rgba(2,6,23,0.55) 0%, rgba(2,6,23,0.72) 100%)',
+            },
+          },
+        },
+      },
+      MuiIconButton: {
+        styleOverrides: {
+          root: {
+            '@media (max-width: 899.95px)': {
+              minWidth: 44,
+              minHeight: 44,
             },
           },
         },
@@ -115,6 +128,17 @@ export function createFlowdayTheme(mode: 'light' | 'dark') {
           root: {
             backdropFilter: 'blur(12px)',
             backgroundColor: isLight ? alpha('#ffffff', 0.92) : alpha('#0f172a', 0.92),
+          },
+        },
+      },
+      MuiBottomNavigationAction: {
+        styleOverrides: {
+          root: {
+            minWidth: 56,
+            paddingTop: 6,
+            '& .MuiBottomNavigationAction-label': {
+              fontSize: '0.65rem',
+            },
           },
         },
       },

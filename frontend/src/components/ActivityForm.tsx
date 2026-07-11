@@ -245,7 +245,7 @@ export default function ActivityForm({
           </FormControl>
         )}
 
-        <Stack direction="row" spacing={1} justifyContent="flex-end">
+        <Stack direction={{ xs: 'column-reverse', sm: 'row' }} spacing={1} justifyContent="flex-end">
           <Button component={RouterLink} to={onCancelTo}>
             Cancelar
           </Button>

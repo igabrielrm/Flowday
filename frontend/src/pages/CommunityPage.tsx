@@ -33,7 +33,7 @@ function RelationActions({
 
   if (estadoRelacion === 'CONECTADO') {
     return (
-      <Stack direction="row" spacing={1} alignItems="center">
+      <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" useFlexGap>
         <Chip label="Conectado" color="success" size="small" />
         <Button size="small" component={RouterLink} to={`/chat?user=${user.id}`}>
           Chat
@@ -43,7 +43,7 @@ function RelationActions({
   }
   if (estadoRelacion === 'SOLICITUD_ENVIADA') {
     return (
-      <Stack direction="row" spacing={1} alignItems="center">
+      <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" useFlexGap>
         <Chip label="Solicitud enviada" color="info" size="small" />
         {conexionId && (
           <Button
@@ -59,7 +59,7 @@ function RelationActions({
   }
   if (estadoRelacion === 'SOLICITUD_RECIBIDA' && conexionId) {
     return (
-      <Stack direction="row" spacing={1}>
+      <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
         <Button
           size="small"
           variant="contained"
@@ -110,9 +110,11 @@ function UserRow({
           ) : (
             <Avatar sx={{ width: 48, height: 48 }}>{userInitials(user.nombre)}</Avatar>
           )}
-          <Box flex={1}>
-            <Typography fontWeight={700} color="text.primary">{user.nombre}</Typography>
-            <Typography variant="body2" color="text.secondary">
+          <Box flex={1} minWidth={0}>
+            <Typography fontWeight={700} color="text.primary" noWrap>
+              {user.nombre}
+            </Typography>
+            <Typography variant="body2" color="text.secondary" noWrap>
               {user.correo}
             </Typography>
           </Box>

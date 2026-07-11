@@ -17,7 +17,12 @@ export default function PageHeader({ title, subtitle, actions }: Props) {
       sx={{ mb: 1 }}
     >
       <Box>
-        <Typography variant="h4" component="h1" gutterBottom={!!subtitle}>
+        <Typography
+          variant="h4"
+          component="h1"
+          gutterBottom={!!subtitle}
+          sx={{ fontSize: { xs: '1.35rem', sm: '1.75rem', md: '2.125rem' }, lineHeight: 1.2 }}
+        >
           {title}
         </Typography>
         {subtitle && (

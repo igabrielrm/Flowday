@@ -111,14 +111,21 @@ export default function DashboardPage() {
               {urgentAlerts.slice(0, 5).map((a) => (
                 <Stack
                   key={a.id}
-                  direction="row"
-                  alignItems="center"
+                  direction={{ xs: 'column', sm: 'row' }}
+                  alignItems={{ xs: 'stretch', sm: 'center' }}
                   justifyContent="space-between"
                   sx={{ p: 1.5, borderRadius: 2, bgcolor: 'action.hover', gap: 1 }}
                 >
                   <Button
                     onClick={() => setDetailId(a.id)}
-                    sx={{ justifyContent: 'flex-start', textAlign: 'left', flex: 1, py: 0.5, color: 'text.primary' }}
+                    sx={{
+                      justifyContent: 'flex-start',
+                      textAlign: 'left',
+                      flex: 1,
+                      py: 0.5,
+                      color: 'text.primary',
+                      whiteSpace: 'normal',
+                    }}
                   >
                     {a.titulo}
                   </Button>
@@ -133,15 +140,15 @@ export default function DashboardPage() {
       {scheduleAlert && (
         <Card sx={glassSurface(theme)}>
           <CardContent>
-            <Stack direction="row" spacing={2} alignItems="center">
+            <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} alignItems={{ xs: 'flex-start', sm: 'center' }}>
               <Typography fontSize={28}>{scheduleAlert.enCurso ? '📚' : '⏰'}</Typography>
-              <Box flex={1}>
+              <Box flex={1} minWidth={0}>
                 <Typography fontWeight={700}>{scheduleAlert.materia}</Typography>
                 <Typography variant="body2" color="text.secondary" mt={0.5}>
                   {scheduleAlert.mensaje}
                 </Typography>
               </Box>
-              <Button component={RouterLink} to="/schedule" variant="outlined" size="small">
+              <Button component={RouterLink} to="/schedule" variant="outlined" sx={{ flexShrink: 0 }}>
                 Ver horario
               </Button>
             </Stack>
@@ -161,8 +168,8 @@ export default function DashboardPage() {
             gap: 1.5,
           }}
         >
-          <IconButton size="small" onClick={() => setViewDate(shiftDate(viewDate, -1))} sx={glassButton(theme)}>
-            <ChevronLeftIcon fontSize="small" />
+          <IconButton onClick={() => setViewDate(shiftDate(viewDate, -1))} sx={glassButton(theme)}>
+            <ChevronLeftIcon />
           </IconButton>
           <Box textAlign="center" sx={{ minWidth: 180 }}>
             <Typography variant="h6" fontWeight={700}>
@@ -172,8 +179,8 @@ export default function DashboardPage() {
               {dayItems.length} actividad{dayItems.length === 1 ? '' : 'es'}
             </Typography>
           </Box>
-          <IconButton size="small" onClick={() => setViewDate(shiftDate(viewDate, 1))} sx={glassButton(theme)}>
-            <ChevronRightIcon fontSize="small" />
+          <IconButton onClick={() => setViewDate(shiftDate(viewDate, 1))} sx={glassButton(theme)}>
+            <ChevronRightIcon />
           </IconButton>
         </Box>
 

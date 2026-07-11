@@ -13,11 +13,13 @@ export default function AuthShell({ children, maxWidth = 440 }: Props) {
   return (
     <Box
       sx={{
-        minHeight: '100vh',
+        minHeight: '100dvh',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        p: 2,
+        p: { xs: 2, sm: 3 },
+        pt: { xs: 'max(16px, env(safe-area-inset-top))', sm: 3 },
+        pb: { xs: 'max(16px, env(safe-area-inset-bottom))', sm: 3 },
         position: 'relative',
       }}
     >

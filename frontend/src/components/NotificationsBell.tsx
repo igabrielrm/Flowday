@@ -63,8 +63,8 @@ export default function NotificationsBell() {
         slotProps={{
           paper: {
             sx: {
-              width: 340,
-              maxHeight: 420,
+              width: 'min(340px, calc(100vw - 32px))',
+              maxHeight: 'min(420px, calc(100dvh - 120px))',
               mt: 1,
               overflow: 'hidden',
               ...glassSurface(theme, { strong: true }),
