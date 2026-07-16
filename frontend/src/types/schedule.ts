@@ -1,5 +1,6 @@
 export type ScheduleBlock = {
   id: number;
+  version?: number;
   materia: string;
   diaSemana: number;
   diaNombre: string;

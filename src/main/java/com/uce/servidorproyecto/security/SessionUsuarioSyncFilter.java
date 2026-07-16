@@ -25,10 +25,13 @@ public class SessionUsuarioSyncFilter extends OncePerRequestFilter {
 
         HttpSession session = request.getSession(false);
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        String authorization = request.getHeader("Authorization");
+        boolean bearerRequest = authorization != null
+                && authorization.regionMatches(true, 0, "Bearer ", 0, 7);
 
         if (authentication != null && authentication.getPrincipal() instanceof UsuarioPrincipal principal) {
             Usuario usuario = principal.getUsuario();
-            if (session != null) {
+            if (session != null && !bearerRequest) {
                 session.setAttribute(SecurityUtils.SESSION_USUARIO, usuario);
                 touchUltimoAcceso(usuario);
             }

@@ -94,16 +94,10 @@ public class ActividadService {
                 || "CITA_LABORAL".equals(tipo) || "TRABAJO_GRUPO".equals(tipo);
     }
 
-    /** Recursos IA solo para tareas (DEBER) y exámenes (EXAMEN). */
-    public boolean aplicaRecursosIa(Actividad actividad) {
-        if (actividad == null || actividad.getTipo() == null) return false;
-        String tipo = actividad.getTipo();
-        return "DEBER".equals(tipo) || "EXAMEN".equals(tipo);
-    }
-
     public Map<String, Object> toReagendarMap(Actividad a) {
         Map<String, Object> m = new HashMap<>();
         m.put("id", a.getId());
+        m.put("version", a.getVersion());
         m.put("titulo", a.getTitulo());
         m.put("tipo", a.getTipo());
         m.put("fechaInicio", a.getFechaInicio() != null ? a.getFechaInicio().toString() : null);
@@ -289,6 +283,7 @@ public class ActividadService {
     public Map<String, Object> toDetalleMap(Actividad actividad, Usuario usuario) {
         Map<String, Object> map = new HashMap<>();
         map.put("id", actividad.getId());
+        map.put("version", actividad.getVersion());
         map.put("titulo", actividad.getTitulo());
         map.put("descripcion", actividad.getDescripcion());
         map.put("materia", actividad.getMateria());
@@ -300,7 +295,6 @@ public class ActividadService {
         map.put("prioridad", actividad.getPrioridad());
         map.put("color", actividad.getColor());
         map.put("esAcademico", actividad.isEsAcademico());
-        map.put("aplicaRecursosIa", aplicaRecursosIa(actividad));
         map.put("puedeEditar", puedeEditar(usuario, actividad));
         map.put("esCompartida", !puedeEditar(usuario, actividad));
 
@@ -317,6 +311,7 @@ public class ActividadService {
     public Map<String, Object> toListaMap(Actividad actividad, Usuario usuario) {
         Map<String, Object> map = new HashMap<>();
         map.put("id", actividad.getId());
+        map.put("version", actividad.getVersion());
         map.put("titulo", actividad.getTitulo());
         map.put("materia", actividad.getMateria());
         map.put("tipo", actividad.getTipo());
@@ -341,6 +336,7 @@ public class ActividadService {
     public Map<String, Object> toResumenMap(Actividad actividad) {
         Map<String, Object> map = new HashMap<>();
         map.put("id", actividad.getId());
+        map.put("version", actividad.getVersion());
         map.put("titulo", actividad.getTitulo());
         map.put("estado", actividad.getEstado());
         map.put("prioridad", actividad.getPrioridad());

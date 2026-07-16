@@ -3,6 +3,10 @@ import {
   Alert,
   Box,
   Button,
+  Card,
+  CardContent,
+  Chip,
+  CircularProgress,
   Dialog,
   Fab,
   IconButton,
@@ -10,18 +14,35 @@ import {
   TextField,
   Tooltip,
   Typography,
+  useMediaQuery,
   useTheme,
 } from '@mui/material';
 import SmartToyOutlinedIcon from '@mui/icons-material/SmartToyOutlined';
 import SendRoundedIcon from '@mui/icons-material/SendRounded';
 import CloseIcon from '@mui/icons-material/Close';
 import DeleteOutlinedIcon from '@mui/icons-material/DeleteOutlined';
-import { api } from '../api/client';
+import { api, type AssistantProposal } from '../api/client';
 import { modalSlotProps } from '../theme/modal';
+import { ASSISTANT_ACTION_EVENT } from '../events';
 
-type Msg = { rol: 'user' | 'assistant'; contenido: string };
+type Msg = {
+  rol: 'user' | 'assistant';
+  contenido: string;
+  proposal?: AssistantProposal | null;
+};
 
 const STORAGE_KEY = 'flowday-ia-chat';
+
+function proposalSummary(proposal: AssistantProposal) {
+  if (proposal.summary) return proposal.summary;
+  const payload = proposal.payload ?? {};
+  const title = String(payload.title ?? payload.activityTitle ?? 'Actividad');
+  const date = payload.date ? ` · ${String(payload.date)}` : '';
+  const time = payload.time ? ` a las ${String(payload.time).slice(0, 5)}` : '';
+  return proposal.type === 'CREATE_ACTIVITY'
+    ? `Crear “${title}”${date}${time}`
+    : `Reagendar “${title}”${date}${time}`;
+}
 
 function loadStoredMessages(): Msg[] {
   try {
@@ -41,10 +62,12 @@ type Props = {
 
 export default function VirtualCompanion({ fabOnTop = false }: Props) {
   const theme = useTheme();
+  const fullScreen = useMediaQuery(theme.breakpoints.down('sm'));
   const [open, setOpen] = useState(false);
   const [messages, setMessages] = useState<Msg[]>(() => loadStoredMessages());
   const [text, setText] = useState('');
   const [sending, setSending] = useState(false);
+  const [actionBusy, setActionBusy] = useState<string | null>(null);
   const [iaReady, setIaReady] = useState<boolean | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
 
@@ -81,13 +104,20 @@ export default function VirtualCompanion({ fabOnTop = false }: Props) {
     const next = [...messages, { rol: 'user' as const, contenido: userMsg }];
     persistMessages(next);
     setSending(true);
-    const res = await api.ia.chat(
+    const res = await api.assistant.message(
       userMsg,
-      next.map((m) => ({ rol: m.rol, contenido: m.contenido })),
+      messages.map((m) => ({ rol: m.rol, contenido: m.contenido })),
     );
     if (res.ok && res.data?.respuesta) {
       const note = res.data.fallback ? ' (modo sin IA — revisa Groq en el servidor)' : '';
-      persistMessages([...next, { rol: 'assistant', contenido: res.data!.respuesta + note }]);
+      persistMessages([
+        ...next,
+        {
+          rol: 'assistant',
+          contenido: res.data.respuesta + note,
+          proposal: res.data.proposal,
+        },
+      ]);
     } else {
       persistMessages([
         ...next,
@@ -100,6 +130,39 @@ export default function VirtualCompanion({ fabOnTop = false }: Props) {
       ]);
     }
     setSending(false);
+  }
+
+  async function resolveProposal(proposal: AssistantProposal, action: 'confirm' | 'cancel') {
+    if (!navigator.onLine) return;
+    setActionBusy(proposal.id);
+    const res =
+      action === 'confirm'
+        ? await api.assistant.confirm(proposal.id)
+        : await api.assistant.cancel(proposal.id);
+
+    if (res.ok) {
+      const status = action === 'confirm' ? 'CONFIRMED' : 'CANCELLED';
+      const updated = messages.map((message) =>
+        message.proposal?.id === proposal.id
+          ? { ...message, proposal: { ...message.proposal, status } as AssistantProposal }
+          : message,
+      );
+      const responseMessage =
+        action === 'confirm'
+          ? 'Listo, apliqué el cambio y actualicé tu planificación.'
+          : 'De acuerdo, cancelé la propuesta.';
+      persistMessages([...updated, { rol: 'assistant', contenido: responseMessage }]);
+      window.dispatchEvent(new CustomEvent(ASSISTANT_ACTION_EVENT));
+    } else {
+      persistMessages([
+        ...messages,
+        {
+          rol: 'assistant',
+          contenido: res.error || 'No pude aplicar esa propuesta. Intenta consultarla nuevamente.',
+        },
+      ]);
+    }
+    setActionBusy(null);
   }
 
   return (
@@ -124,13 +187,14 @@ export default function VirtualCompanion({ fabOnTop = false }: Props) {
       <Dialog
         open={open}
         onClose={() => setOpen(false)}
+        fullScreen={fullScreen}
         fullWidth
         maxWidth="sm"
         slotProps={{
           paper: {
             sx: {
               ...modalSlotProps(theme).paper.sx,
-              height: { xs: '72dvh', sm: 520 },
+              height: { xs: '100dvh', sm: 520 },
               display: 'flex',
               flexDirection: 'column',
             },
@@ -170,26 +234,89 @@ export default function VirtualCompanion({ fabOnTop = false }: Props) {
           <Stack spacing={1.5}>
             {messages.length === 0 && (
               <Typography variant="body2" color="text.secondary">
-                Pregúntame sobre organización, estudio o bienestar. Tu historial se guarda en este dispositivo.
+                Puedo consultar tus actividades y horario, ayudarte a planificar y proponerte crear o reagendar
+                actividades. Siempre te pediré confirmación antes de cambiar algo.
               </Typography>
             )}
             {messages.map((m, i) => (
-              <Box
+              <Stack
                 key={i}
+                spacing={1}
                 sx={{
                   alignSelf: m.rol === 'user' ? 'flex-end' : 'flex-start',
-                  maxWidth: '85%',
-                  px: 1.5,
-                  py: 1.25,
-                  borderRadius: m.rol === 'user' ? '16px 16px 4px 16px' : '16px 16px 16px 4px',
-                  bgcolor: m.rol === 'user' ? 'primary.main' : 'action.hover',
-                  color: m.rol === 'user' ? 'primary.contrastText' : 'text.primary',
+                  maxWidth: { xs: '94%', sm: '85%' },
                 }}
               >
-                <Typography variant="body2" sx={{ lineHeight: 1.5 }}>
-                  {m.contenido}
-                </Typography>
-              </Box>
+                <Box
+                  sx={{
+                    px: 1.5,
+                    py: 1.25,
+                    borderRadius: m.rol === 'user' ? '16px 16px 4px 16px' : '16px 16px 16px 4px',
+                    bgcolor: m.rol === 'user' ? 'primary.main' : 'action.hover',
+                    color: m.rol === 'user' ? 'primary.contrastText' : 'text.primary',
+                  }}
+                >
+                  <Typography variant="body2" sx={{ lineHeight: 1.5 }}>
+                    {m.contenido}
+                  </Typography>
+                </Box>
+
+                {m.proposal && (
+                  <Card variant="outlined" sx={{ bgcolor: 'background.paper' }}>
+                    <CardContent sx={{ p: 1.5, '&:last-child': { pb: 1.5 } }}>
+                      <Stack spacing={1.25}>
+                        <Stack direction="row" alignItems="center" justifyContent="space-between" gap={1}>
+                          <Typography variant="subtitle2" fontWeight={700}>
+                            Cambio propuesto
+                          </Typography>
+                          <Chip
+                            size="small"
+                            label={
+                              m.proposal.status === 'CONFIRMED'
+                                ? 'Aplicado'
+                                : m.proposal.status === 'CANCELLED'
+                                  ? 'Cancelado'
+                                  : m.proposal.status === 'EXPIRED'
+                                    ? 'Expirado'
+                                    : 'Pendiente'
+                            }
+                            color={m.proposal.status === 'CONFIRMED' ? 'success' : 'default'}
+                          />
+                        </Stack>
+                        <Typography variant="body2">{proposalSummary(m.proposal)}</Typography>
+                        {!!m.proposal.conflicts?.length && (
+                          <Alert severity="warning">
+                            {m.proposal.conflicts.join(' · ')}
+                          </Alert>
+                        )}
+                        {(m.proposal.status == null || m.proposal.status === 'PENDING') && (
+                          <Stack direction="row" spacing={1}>
+                            <Button
+                              size="small"
+                              variant="contained"
+                              disabled={!!actionBusy || !navigator.onLine}
+                              onClick={() => resolveProposal(m.proposal!, 'confirm')}
+                            >
+                              {actionBusy === m.proposal.id ? (
+                                <CircularProgress size={18} color="inherit" />
+                              ) : (
+                                'Confirmar'
+                              )}
+                            </Button>
+                            <Button
+                              size="small"
+                              disabled={!!actionBusy || !navigator.onLine}
+                              onClick={() => resolveProposal(m.proposal!, 'cancel')}
+                            >
+                              Cancelar
+                            </Button>
+                          </Stack>
+                        )}
+                      </Stack>
+                    </CardContent>
+                  </Card>
+                )}
+              </Stack>
             ))}
             <div ref={bottomRef} />
           </Stack>

@@ -105,6 +105,7 @@ public class ScheduleApiController {
         Map<String, Object> map = horarioService.toMap(c);
         return new ScheduleBlockDto(
                 (Long) map.get("id"),
+                c.getVersion(),
                 (String) map.get("materia"),
                 (Integer) map.get("diaSemana"),
                 (String) map.get("diaNombre"),

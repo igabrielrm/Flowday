@@ -1,21 +1,30 @@
 import { useCallback, useEffect, useState } from 'react';
 import { OFFLINE_QUEUE_EVENT } from '../events';
-import { pendingCount } from './queue';
+import {
+  pendingCount,
+  readQueue,
+  removeFromQueue,
+  updateMutation,
+  type OfflineMutation,
+} from './queue';
+import { notifyOfflineQueueChanged } from '../events';
 import { flushOfflineQueue } from './sync';
 import { useOnlineStatus } from './useOnlineStatus';
 
 export function useOfflineSync() {
   const online = useOnlineStatus();
-  const [pending, setPending] = useState(pendingCount);
+  const [pending, setPending] = useState(0);
+  const [entries, setEntries] = useState<OfflineMutation[]>([]);
   const [syncing, setSyncing] = useState(false);
   const [lastError, setLastError] = useState<string | null>(null);
 
   const refreshPending = useCallback(() => {
-    setPending(pendingCount());
+    pendingCount().then(setPending);
+    readQueue(true).then(setEntries);
   }, []);
 
   const syncNow = useCallback(async () => {
-    if (!navigator.onLine || pendingCount() === 0) return;
+    if (!navigator.onLine || (await pendingCount()) === 0) return;
     setSyncing(true);
     setLastError(null);
     const result = await flushOfflineQueue();
@@ -34,10 +43,19 @@ export function useOfflineSync() {
   }, [refreshPending]);
 
   useEffect(() => {
-    if (online && pendingCount() > 0) {
-      syncNow();
-    }
+    if (online) pendingCount().then((count) => count > 0 && syncNow());
   }, [online, syncNow]);
 
-  return { online, pending, syncing, lastError, syncNow, refreshPending };
+  const retry = useCallback(async (id: string) => {
+    await updateMutation(id, { status: 'PENDING', lastError: undefined, serverData: undefined });
+    notifyOfflineQueueChanged();
+    if (navigator.onLine) await syncNow();
+  }, [syncNow]);
+
+  const discard = useCallback(async (id: string) => {
+    await removeFromQueue(id);
+    notifyOfflineQueueChanged();
+  }, []);
+
+  return { online, pending, entries, syncing, lastError, syncNow, retry, discard, refreshPending };
 }

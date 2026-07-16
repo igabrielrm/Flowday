@@ -27,6 +27,7 @@ import { useAuth } from '../auth/AuthContext';
 import PageHeader from '../components/mui/PageHeader';
 import PageStack from '../components/mui/PageStack';
 import type { Profile } from '../types/profile';
+import { assetUrl } from '../platform';
 import { GENERO_OPTIONS, applyTheme, profileInitials } from '../types/profile';
 import { glassButton } from '../theme/glass';
 
@@ -154,7 +155,7 @@ export default function ProfilePage() {
     return <Alert severity="error">{error || 'Perfil no disponible'}</Alert>;
   }
 
-  const avatarUrl = profile.foto || null;
+  const avatarUrl = assetUrl(profile.foto) || null;
 
   return (
     <PageStack>

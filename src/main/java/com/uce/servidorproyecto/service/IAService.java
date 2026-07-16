@@ -230,60 +230,6 @@ public class IAService {
         return resultado;
     }
 
-    // ===== RECURSOS EDUCATIVOS PARA ACTIVIDAD =====
-    public Map<String, Object> recursosParaActividad(Actividad actividad) {
-        Map<String, Object> resultado = new LinkedHashMap<>();
-        String tema = actividad.getMateria() != null && !actividad.getMateria().isBlank()
-                ? actividad.getMateria()
-                : actividad.getTitulo();
-        String desc = actividad.getDescripcion() != null ? actividad.getDescripcion() : "";
-        String tipo = actividad.getTipo() != null ? actividad.getTipo() : "general";
-
-        String consulta = construirConsultaRecursos(tema, actividad.getTitulo(), tipo);
-
-        String prompt = """
-            Sugiere 4 recursos educativos en línea para esta tarea universitaria.
-            Tema/materia: %s
-            Título: %s
-            Tipo: %s
-            Descripción: %s
-
-            Responde SOLO JSON array válido (sin markdown):
-            [{"titulo":"nombre breve","url":"https://..."}]
-
-            Preferencia de URLs (siempre funcionan):
-            - YouTube búsqueda: https://www.youtube.com/results?search_query=TEMA
-            - Khan Academy búsqueda: https://www.khanacademy.org/search?page_search_query=TEMA
-            - Google Scholar: https://scholar.google.com/scholar?q=TEMA
-            - Wikipedia búsqueda en español
-            NO uses Coursera, Udemy, edX, Platzi, LinkedIn Learning ni plataformas de pago.
-            Codifica espacios como + o %%20. No uses URLs inventadas ni placeholders.
-            """.formatted(tema, actividad.getTitulo(), tipo, desc);
-
-        try {
-            String respuesta = iaProvider.consultar(prompt);
-            List<Map<String, String>> recursos = validarYNormalizarRecursos(parsearRecursosJson(respuesta), consulta);
-            if (recursos.isEmpty()) {
-                recursos = recursosBusquedaValidos(consulta);
-                resultado.put("ia", false);
-            } else {
-                resultado.put("ia", true);
-            }
-            resultado.put("ok", true);
-            resultado.put("tema", tema);
-            resultado.put("recursos", recursos);
-            resultado.put("mensaje", "Recursos recomendados para: " + tema);
-        } catch (Exception e) {
-            resultado.put("ok", true);
-            resultado.put("tema", tema);
-            resultado.put("recursos", recursosBusquedaValidos(consulta));
-            resultado.put("mensaje", "Recursos sugeridos (modo offline)");
-            resultado.put("ia", false);
-            resultado.put("fallback", true);
-        }
-        return resultado;
-    }
-
     private String respuestaChatFallback(String mensaje, List<Map<String, String>> historial) {
         String lower = mensaje.toLowerCase();
         boolean hayContexto = historial != null && !historial.isEmpty();
@@ -318,7 +264,7 @@ public class IAService {
             if (text.isBlank()) continue;
             if ("user".equals(role)) {
                 sb.append("Estudiante: ").append(text).append('\n');
-            } else if ("bot".equals(role)) {
+            } else if ("assistant".equals(role) || "bot".equals(role)) {
                 sb.append("Tú: ").append(text).append('\n');
             }
         }
@@ -474,7 +420,4 @@ public class IAService {
         return items;
     }
 
-    private List<Map<String, String>> recursosFallbackActividad(String tema, String tipo) {
-        return recursosBusquedaValidos(construirConsultaRecursos(tema, null, tipo));
-    }
 }

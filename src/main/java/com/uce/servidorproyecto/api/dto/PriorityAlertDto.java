@@ -6,6 +6,7 @@ import java.time.LocalDate;
 
 public record PriorityAlertDto(
         Long id,
+        Long version,
         String titulo,
         String tipo,
         String motivo,
@@ -15,6 +16,7 @@ public record PriorityAlertDto(
     public static PriorityAlertDto from(Actividad a, String motivo) {
         return new PriorityAlertDto(
                 a.getId(),
+                a.getVersion(),
                 a.getTitulo(),
                 a.getTipo(),
                 motivo,

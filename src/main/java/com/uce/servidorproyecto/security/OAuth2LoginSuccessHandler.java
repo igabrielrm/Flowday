@@ -1,6 +1,7 @@
 package com.uce.servidorproyecto.security;
 
 import com.uce.servidorproyecto.model.Usuario;
+import com.uce.servidorproyecto.config.MobileAuthProperties;
 import com.uce.servidorproyecto.service.UsuarioService;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -21,6 +22,12 @@ public class OAuth2LoginSuccessHandler implements AuthenticationSuccessHandler {
     @Autowired
     private UsuarioService usuarioService;
 
+    @Autowired
+    private MobileOAuthCodeService mobileOAuthCodeService;
+
+    @Autowired
+    private MobileAuthProperties mobileAuthProperties;
+
     @Override
     public void onAuthenticationSuccess(HttpServletRequest request,
                                         HttpServletResponse response,
@@ -28,7 +35,7 @@ public class OAuth2LoginSuccessHandler implements AuthenticationSuccessHandler {
         OAuth2User oauthUser = (OAuth2User) authentication.getPrincipal();
         String email = extractEmail(oauthUser);
         if (email == null || email.isBlank()) {
-            response.sendRedirect("/app/login?error=oauth_email");
+            redirectError(request, response, "oauth_email");
             return;
         }
 
@@ -36,12 +43,34 @@ public class OAuth2LoginSuccessHandler implements AuthenticationSuccessHandler {
             String nombre = oauthUser.getAttribute("name");
             Usuario usuario = usuarioService.resolverOAuth(email, nombre);
             HttpSession session = request.getSession(true);
+            if (Boolean.TRUE.equals(session.getAttribute(MobileOAuthCodeService.SESSION_MOBILE_OAUTH))) {
+                session.removeAttribute(MobileOAuthCodeService.SESSION_MOBILE_OAUTH);
+                String challenge = (String) session.getAttribute(MobileOAuthCodeService.SESSION_CODE_CHALLENGE);
+                session.removeAttribute(MobileOAuthCodeService.SESSION_CODE_CHALLENGE);
+                String code = mobileOAuthCodeService.issueCode(usuario, challenge);
+                response.sendRedirect(mobileAuthProperties.getOauthCallback()
+                        + "?code=" + URLEncoder.encode(code, StandardCharsets.UTF_8));
+                return;
+            }
             SecurityUtils.establishAuthenticatedSession(session, usuario);
             response.sendRedirect("/app/");
         } catch (IllegalStateException ex) {
             String msg = URLEncoder.encode(ex.getMessage(), StandardCharsets.UTF_8);
-            response.sendRedirect("/app/login?error=oauth_denied&msg=" + msg);
+            redirectError(request, response, "oauth_denied&msg=" + msg);
         }
+    }
+
+    private void redirectError(HttpServletRequest request, HttpServletResponse response, String error)
+            throws IOException {
+        HttpSession session = request.getSession(false);
+        if (session != null
+                && Boolean.TRUE.equals(session.getAttribute(MobileOAuthCodeService.SESSION_MOBILE_OAUTH))) {
+            session.removeAttribute(MobileOAuthCodeService.SESSION_MOBILE_OAUTH);
+            session.removeAttribute(MobileOAuthCodeService.SESSION_CODE_CHALLENGE);
+            response.sendRedirect(mobileAuthProperties.getOauthCallback() + "?error=" + error);
+            return;
+        }
+        response.sendRedirect("/app/login?error=" + error);
     }
 
     private String extractEmail(OAuth2User user) {

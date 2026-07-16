@@ -33,6 +33,8 @@ import { glassSurface } from '../theme/glass';
 import type { ChatMessage, Conversation } from '../types/chat';
 import { userInitials } from '../types/community';
 import { notifyChatUnreadChanged } from '../events';
+import { websocketUrl } from '../platform';
+import { nativeAuthHeaders } from '../auth/nativeAuth';
 
 function formatMessageTime(fecha?: string | null) {
   if (!fecha) return '';
@@ -99,9 +101,12 @@ export default function ChatPage() {
 
   useEffect(() => {
     const client = new Client({
-      webSocketFactory: () => new SockJS('/ws') as unknown as WebSocket,
+      webSocketFactory: () => new SockJS(websocketUrl('/ws')) as unknown as WebSocket,
       reconnectDelay: 5000,
       debug: () => {},
+      beforeConnect: async () => {
+        client.connectHeaders = await nativeAuthHeaders();
+      },
       onConnect: () => {
         client.subscribe('/user/queue/chat', (message: IMessage) => {
           try {

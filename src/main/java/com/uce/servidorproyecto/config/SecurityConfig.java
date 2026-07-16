@@ -1,6 +1,7 @@
 package com.uce.servidorproyecto.config;
 
 import com.uce.servidorproyecto.security.LoginRateLimitFilter;
+import com.uce.servidorproyecto.security.MobileBearerAuthenticationFilter;
 import com.uce.servidorproyecto.security.OAuth2LoginSuccessHandler;
 import com.uce.servidorproyecto.security.SessionUsuarioSyncFilter;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -18,8 +19,12 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 import org.springframework.security.web.csrf.CookieCsrfTokenRepository;
 import org.springframework.security.web.csrf.CsrfTokenRequestAttributeHandler;
 import org.springframework.security.web.header.writers.ReferrerPolicyHeaderWriter;
+import org.springframework.web.cors.CorsConfiguration;
+import org.springframework.web.cors.CorsConfigurationSource;
+import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
 import java.util.Arrays;
+import java.util.List;
 
 @Configuration
 @EnableWebSecurity
@@ -34,6 +39,12 @@ public class SecurityConfig {
 
     @Autowired
     private SessionUsuarioSyncFilter sessionUsuarioSyncFilter;
+
+    @Autowired
+    private MobileBearerAuthenticationFilter mobileBearerAuthenticationFilter;
+
+    @Autowired
+    private MobileAuthProperties mobileAuthProperties;
 
     @Autowired
     private Environment environment;
@@ -54,6 +65,7 @@ public class SecurityConfig {
         csrfHandler.setCsrfRequestAttributeName(null);
 
         http
+            .cors(cors -> cors.configurationSource(corsConfigurationSource()))
             .csrf(csrf -> csrf
                 .csrfTokenRepository(CookieCsrfTokenRepository.withHttpOnlyFalse())
                 .csrfTokenRequestHandler(csrfHandler)
@@ -96,6 +108,16 @@ public class SecurityConfig {
                 ).permitAll()
                 .requestMatchers(HttpMethod.GET, internalLogin).permitAll()
                 .requestMatchers(HttpMethod.POST, internalLogin).permitAll()
+                .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
+                .requestMatchers("/ws/**").permitAll()
+                .requestMatchers(HttpMethod.POST,
+                        "/api/v1/mobile-auth/login",
+                        "/api/v1/mobile-auth/refresh",
+                        "/api/v1/mobile-auth/oauth/exchange",
+                        "/api/v1/mobile-auth/logout").permitAll()
+                .requestMatchers(HttpMethod.GET,
+                        "/api/v1/mobile-auth/oauth-contract",
+                        "/api/v1/mobile-auth/oauth/*/start").permitAll()
                 .requestMatchers(HttpMethod.POST, "/api/v1/auth/login").permitAll()
                 .requestMatchers(HttpMethod.POST, "/api/v1/auth/admin-login").permitAll()
                 .requestMatchers(HttpMethod.POST, "/api/v1/auth/register").permitAll()
@@ -142,9 +164,24 @@ public class SecurityConfig {
         }
 
         http.addFilterBefore(loginRateLimitFilter, UsernamePasswordAuthenticationFilter.class);
+        http.addFilterBefore(mobileBearerAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
         http.addFilterAfter(sessionUsuarioSyncFilter, UsernamePasswordAuthenticationFilter.class);
 
         return http.build();
+    }
+
+    @Bean
+    public CorsConfigurationSource corsConfigurationSource() {
+        CorsConfiguration configuration = new CorsConfiguration();
+        configuration.setAllowedOrigins(mobileAuthProperties.getAllowedOrigins());
+        configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
+        configuration.setAllowedHeaders(List.of("Authorization", "Content-Type", "X-XSRF-TOKEN"));
+        configuration.setExposedHeaders(List.of("WWW-Authenticate"));
+        configuration.setAllowCredentials(true);
+        configuration.setMaxAge(3600L);
+        UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
+        source.registerCorsConfiguration("/**", configuration);
+        return source;
     }
 
     private String normalizePrefix(String prefix) {

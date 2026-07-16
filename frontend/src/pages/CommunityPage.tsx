@@ -19,6 +19,7 @@ import PageStack from '../components/mui/PageStack';
 import { useDebouncedValue } from '../hooks/useDebouncedValue';
 import type { CommunityUser } from '../types/community';
 import { userInitials } from '../types/community';
+import { assetUrl } from '../platform';
 
 function RelationActions({
   item,
@@ -106,7 +107,7 @@ function UserRow({
       <CardContent>
         <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} alignItems={{ sm: 'center' }}>
           {user.foto ? (
-            <Avatar src={user.foto} alt="" sx={{ width: 48, height: 48 }} />
+            <Avatar src={assetUrl(user.foto)} alt="" sx={{ width: 48, height: 48 }} />
           ) : (
             <Avatar sx={{ width: 48, height: 48 }}>{userInitials(user.nombre)}</Avatar>
           )}

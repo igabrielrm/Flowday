@@ -1,6 +1,8 @@
 package com.uce.servidorproyecto.config;
 
 import com.uce.servidorproyecto.model.Usuario;
+import com.uce.servidorproyecto.repository.UsuarioRepository;
+import com.uce.servidorproyecto.security.MobileJwtService;
 import com.uce.servidorproyecto.security.SecurityUtils;
 import jakarta.servlet.http.HttpSession;
 import org.springframework.context.annotation.Configuration;
@@ -15,6 +17,7 @@ import org.springframework.messaging.simp.stomp.StompCommand;
 import org.springframework.messaging.simp.stomp.StompHeaderAccessor;
 import org.springframework.messaging.support.ChannelInterceptor;
 import org.springframework.messaging.support.MessageHeaderAccessor;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.web.socket.WebSocketHandler;
 import org.springframework.web.socket.config.annotation.EnableWebSocketMessageBroker;
 import org.springframework.web.socket.config.annotation.StompEndpointRegistry;
@@ -28,6 +31,18 @@ import java.util.Map;
 @EnableWebSocketMessageBroker
 public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
 
+    private final MobileJwtService jwtService;
+    private final UsuarioRepository usuarioRepository;
+    private final MobileAuthProperties mobileAuthProperties;
+
+    public WebSocketConfig(MobileJwtService jwtService,
+                           UsuarioRepository usuarioRepository,
+                           MobileAuthProperties mobileAuthProperties) {
+        this.jwtService = jwtService;
+        this.usuarioRepository = usuarioRepository;
+        this.mobileAuthProperties = mobileAuthProperties;
+    }
+
     @Override
     public void configureMessageBroker(MessageBrokerRegistry registry) {
         registry.enableSimpleBroker("/topic", "/queue");
@@ -38,7 +53,7 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
     @Override
     public void registerStompEndpoints(StompEndpointRegistry registry) {
         registry.addEndpoint("/ws")
-                .setAllowedOriginPatterns("*")
+                .setAllowedOrigins(mobileAuthProperties.getAllowedOrigins().toArray(String[]::new))
                 .addInterceptors(sessionUserHandshakeInterceptor())
                 .withSockJS();
     }
@@ -82,20 +97,41 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
                     return message;
                 }
                 Map<String, Object> sessionAttrs = accessor.getSessionAttributes();
-                if (sessionAttrs == null) {
-                    return message;
+                Object sessionUserId = sessionAttrs == null ? null : sessionAttrs.get("userId");
+                Long userId = sessionUserId == null ? bearerUserId(accessor) : asLong(sessionUserId);
+                if (userId == null) {
+                    throw new AccessDeniedException("STOMP CONNECT requiere sesión web o Authorization Bearer válido");
                 }
-                Object userId = sessionAttrs.get("userId");
-                if (userId != null) {
-                    accessor.setUser(new Principal() {
-                        @Override
-                        public String getName() {
-                            return String.valueOf(userId);
-                        }
-                    });
-                }
+                accessor.setUser((Principal) () -> String.valueOf(userId));
                 return message;
             }
         };
+    }
+
+    private Long bearerUserId(StompHeaderAccessor accessor) {
+        String authorization = accessor.getFirstNativeHeader("Authorization");
+        if (authorization == null) {
+            authorization = accessor.getFirstNativeHeader("authorization");
+        }
+        if (authorization == null
+                || !authorization.regionMatches(true, 0, "Bearer ", 0, 7)) {
+            return null;
+        }
+        return jwtService.parseUserId(authorization.substring(7).trim())
+                .flatMap(usuarioRepository::findById)
+                .filter(usuario -> "ACTIVO".equals(usuario.getEstado()))
+                .map(Usuario::getId)
+                .orElse(null);
+    }
+
+    private Long asLong(Object value) {
+        if (value instanceof Long longValue) {
+            return longValue;
+        }
+        try {
+            return Long.valueOf(String.valueOf(value));
+        } catch (NumberFormatException exception) {
+            return null;
+        }
     }
 }

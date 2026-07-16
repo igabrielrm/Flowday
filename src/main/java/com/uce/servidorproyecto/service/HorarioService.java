@@ -108,6 +108,7 @@ public class HorarioService {
     public Map<String, Object> toMap(BloqueRecurrente c) {
         Map<String, Object> m = new LinkedHashMap<>();
         m.put("id", c.getId());
+        m.put("version", c.getVersion());
         m.put("materia", c.getMateria());
         m.put("diaSemana", c.getDiaSemana());
         m.put("diaNombre", nombreDia(c.getDiaSemana()));

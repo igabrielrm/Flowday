@@ -1,5 +1,6 @@
 export type ActividadListItem = {
   id: number;
+  version?: number;
   titulo: string;
   tipo: string;
   estado: string;
@@ -15,6 +16,7 @@ export type ActividadListItem = {
 
 export type ActividadDetail = {
   id: number;
+  version?: number;
   titulo: string;
   descripcion?: string | null;
   tipo: string;

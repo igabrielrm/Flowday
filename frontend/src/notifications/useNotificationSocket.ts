@@ -3,6 +3,8 @@ import { Client, IMessage } from '@stomp/stompjs';
 import SockJS from 'sockjs-client';
 import { api } from '../api/client';
 import type { NotificationItem, NotificationPushPayload } from './types';
+import { websocketUrl } from '../platform';
+import { nativeAuthHeaders } from '../auth/nativeAuth';
 
 const POLL_MS = 60_000;
 
@@ -68,11 +70,14 @@ export function useNotificationSocket({ enabled, onPush }: Options) {
     if (clientRef.current?.active) return;
 
     const client = new Client({
-      webSocketFactory: () => new SockJS('/ws') as unknown as WebSocket,
+      webSocketFactory: () => new SockJS(websocketUrl('/ws')) as unknown as WebSocket,
       reconnectDelay: 5000,
       heartbeatIncoming: 10000,
       heartbeatOutgoing: 10000,
       debug: () => {},
+      beforeConnect: async () => {
+        client.connectHeaders = await nativeAuthHeaders();
+      },
       onConnect: () => {
         stopPolling();
         client.subscribe('/user/queue/notifications', (message: IMessage) => {

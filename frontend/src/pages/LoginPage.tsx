@@ -13,6 +13,9 @@ import {
 import { useAuth } from '../auth/AuthContext';
 import { api } from '../api/client';
 import AuthShell from '../components/mui/AuthShell';
+import { Browser } from '@capacitor/browser';
+import { isNative } from '../platform';
+import { nativeOAuthStartUrl } from '../auth/nativeAuth';
 
 export default function LoginPage() {
   const { user, login } = useAuth();
@@ -20,6 +23,7 @@ export default function LoginPage() {
   const [correo, setCorreo] = useState('');
   const [contrasena, setContrasena] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const [backendWarning, setBackendWarning] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [oauthProviders, setOauthProviders] = useState<string[]>([]);
 
@@ -31,6 +35,8 @@ export default function LoginPage() {
       setError(searchParams.get('msg') || 'Acceso OAuth denegado.');
     } else if (oauthError === '1') {
       setError('Correo o contraseña incorrectos.');
+    } else if (oauthError === 'oauth_exchange') {
+      setError('No se pudo completar el acceso móvil. Inténtalo nuevamente.');
     }
   }, [searchParams]);
 
@@ -38,6 +44,11 @@ export default function LoginPage() {
     api.oauthProviders().then((res) => {
       if (res.ok && res.data) setOauthProviders(res.data);
     });
+    if (isNative && navigator.onLine) {
+      api.mobileCompatibility().then((res) => {
+        if (!res.ok) setBackendWarning(res.error);
+      });
+    }
   }, []);
 
   if (user) return <Navigate to="/" replace />;
@@ -51,7 +62,14 @@ export default function LoginPage() {
     setSubmitting(false);
   }
 
-  function oauthLogin(provider: string) {
+  async function oauthLogin(provider: string) {
+    if (isNative) {
+      await Browser.open({
+        url: await nativeOAuthStartUrl(provider),
+        presentationStyle: 'popover',
+      });
+      return;
+    }
     window.location.href = `/oauth2/authorization/${provider}`;
   }
 
@@ -68,6 +86,7 @@ export default function LoginPage() {
         </Box>
 
         {error && <Alert severity="error">{error}</Alert>}
+        {backendWarning && <Alert severity="warning">{backendWarning}</Alert>}
 
         <TextField
           label="Correo"

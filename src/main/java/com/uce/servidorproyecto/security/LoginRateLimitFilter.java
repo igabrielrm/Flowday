@@ -63,10 +63,8 @@ public class LoginRateLimitFilter extends OncePerRequestFilter {
     }
 
     private String resolveClientKey(HttpServletRequest request) {
-        String forwarded = request.getHeader("X-Forwarded-For");
-        if (forwarded != null && !forwarded.isBlank()) {
-            return forwarded.split(",")[0].trim();
-        }
+        // Spring debe resolver proxies confiables mediante server.forward-headers-strategy;
+        // aceptar X-Forwarded-For directamente permitiría evadir el límite falsificando el header.
         return request.getRemoteAddr();
     }
 

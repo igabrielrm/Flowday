@@ -14,6 +14,24 @@ export type ApiResponse<T> = {
   meta?: Record<string, unknown>;
 };
 
+export type AssistantProposal = {
+  id: string;
+  type: 'CREATE_ACTIVITY' | 'RESCHEDULE_ACTIVITY';
+  summary?: string;
+  payload?: Record<string, unknown>;
+  conflicts?: string[];
+  expiresAt?: string;
+  activityId?: number | null;
+  status?: 'PENDING' | 'CONFIRMED' | 'CANCELLED' | 'EXPIRED';
+};
+
+export type AssistantMessageResponse = {
+  respuesta: string;
+  proposal?: AssistantProposal | null;
+  ia?: boolean;
+  fallback?: boolean;
+};
+
 import type { ActividadDetail, ActividadListItem, CreateActividadPayload, PriorityAlert, ReschedulableItem, UpdateActividadPayload } from '../types/activity';
 import type { NotificationItem } from '../notifications/types';
 import type { Profile, UpdateProfilePayload } from '../types/profile';
@@ -52,10 +70,27 @@ import {
   enqueue,
   type OfflineMutationKind,
 } from '../offline/queue';
+import {
+  applyChatDelete,
+  applyChatRead,
+  applyChatSend,
+  applyCommunityConnect,
+  applyCommunityDecision,
+  applyNotificationDelete,
+  applyNotificationRead,
+  applyProfileUpdate,
+  applyWellbeingRecord,
+} from '../offline/domainOptimistic';
+import { apiUrl, isNative } from '../platform';
+import {
+  clearNativeTokens,
+  getNativeRefreshToken,
+  nativeAuthorizedFetch,
+  refreshNativeAccessToken,
+  storeNativeTokens,
+} from '../auth/nativeAuth';
 
 export type { NotificationItem };
-
-const API_BASE = import.meta.env.DEV ? '' : '';
 
 const OFFLINE_MSG =
   'Sin conexión. Conéctate para esta acción o usa los datos guardados de tu última visita.';
@@ -67,7 +102,7 @@ function isGetMethod(init?: RequestInit) {
 }
 
 async function performFetch<T>(path: string, init?: RequestInit): Promise<ApiResponse<T>> {
-  const res = await fetch(`${API_BASE}${path}`, {
+  const res = await nativeAuthorizedFetch(path, {
     credentials: 'include',
     headers: { 'Content-Type': 'application/json', ...(init?.headers || {}) },
     ...init,
@@ -88,16 +123,17 @@ type QueuedRequestConfig<T> = {
   init: RequestInit;
   entityId?: number;
   tempId?: number;
+  expectedVersion?: number;
   optimistic: () => ApiResponse<T>;
 };
 
 async function queuedRequest<T>(config: QueuedRequestConfig<T>): Promise<ApiResponse<T>> {
-  const queueOffline = () => {
+  const queueOffline = async () => {
     const optimistic = config.optimistic();
     if (!optimistic.ok) {
       return optimistic;
     }
-    enqueue({
+    await enqueue({
       kind: config.kind,
       label: config.label,
       method: (config.init.method || 'POST').toUpperCase() as 'POST' | 'PUT' | 'PATCH' | 'DELETE',
@@ -105,6 +141,7 @@ async function queuedRequest<T>(config: QueuedRequestConfig<T>): Promise<ApiResp
       body: typeof config.init.body === 'string' ? config.init.body : undefined,
       entityId: config.entityId ?? config.tempId,
       tempId: config.tempId,
+      expectedVersion: config.expectedVersion,
     });
     notifyOfflineQueueChanged();
     return {
@@ -164,7 +201,7 @@ async function legacyJson<T>(path: string, init?: RequestInit): Promise<{ data: 
   }
 
   try {
-    const res = await fetch(`${API_BASE}${path}`, {
+    const res = await nativeAuthorizedFetch(path, {
       credentials: 'include',
       headers: { 'Content-Type': 'application/json', ...(init?.headers || {}) },
       ...init,
@@ -191,6 +228,31 @@ async function legacyJson<T>(path: string, init?: RequestInit): Promise<{ data: 
   }
 }
 
+async function rawRequest<T>(path: string, init?: RequestInit): Promise<ApiResponse<T>> {
+  if (!isGetMethod(init) && isBrowserOffline()) {
+    return { ok: false, data: null, error: OFFLINE_MSG };
+  }
+  try {
+    const response = await nativeAuthorizedFetch(path, {
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json', ...(init?.headers || {}) },
+      ...init,
+    });
+    if (response.status === 204) return { ok: true, data: null, error: null };
+    const json = (await response.json()) as T & { error?: string; mensaje?: string };
+    if (!response.ok || json?.error) {
+      return {
+        ok: false,
+        data: null,
+        error: json?.error || json?.mensaje || `Error ${response.status}`,
+      };
+    }
+    return { ok: true, data: json, error: null };
+  } catch {
+    return { ok: false, data: null, error: OFFLINE_MSG };
+  }
+}
+
 export async function downloadAdminReport(
   format: 'excel' | 'pdf' | 'csv',
   desde: string,
@@ -200,7 +262,7 @@ export async function downloadAdminReport(
   if (desde) params.set('desde', desde);
   if (hasta) params.set('hasta', hasta);
   const qs = params.toString();
-  const res = await fetch(`/admin/reportes/export/${format}${qs ? `?${qs}` : ''}`, {
+  const res = await nativeAuthorizedFetch(`/admin/reportes/export/${format}${qs ? `?${qs}` : ''}`, {
     credentials: 'include',
   });
   if (!res.ok) {
@@ -218,19 +280,141 @@ export async function downloadAdminReport(
   URL.revokeObjectURL(url);
 }
 
-export const api = {
-  me: () => request<UsuarioDto>('/api/v1/session/me'),
-  login: (correo: string, contrasena: string) =>
-    request<UsuarioDto>('/api/v1/auth/login', {
+async function loginRequest(correo: string, contrasena: string): Promise<ApiResponse<UsuarioDto>> {
+  if (!isNative) {
+    return request<UsuarioDto>('/api/v1/auth/login', {
       method: 'POST',
       body: JSON.stringify({ correo, contrasena }),
-    }),
+    });
+  }
+
+  if (!navigator.onLine) {
+    return {
+      ok: false,
+      data: null,
+      error: 'Necesitas conexión a internet para iniciar sesión por primera vez.',
+    };
+  }
+
+  try {
+    const response = await fetch(apiUrl('/api/v1/mobile-auth/login'), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: correo, password: contrasena }),
+    });
+    const contentType = response.headers.get('content-type') || '';
+    if (!contentType.includes('application/json')) {
+      return {
+        ok: false,
+        data: null,
+        error: 'El backend publicado todavía no es compatible con esta versión del APK.',
+      };
+    }
+    const json = (await response.json()) as ApiResponse<unknown> & Record<string, unknown>;
+    if (!response.ok || json.ok === false) {
+      const serverError = String(json.error || json.mensaje || '');
+      const outdatedBackend =
+        response.status === 404
+        || (response.status === 401 && serverError.toLowerCase().includes('no autenticado'));
+      return {
+        ok: false,
+        data: null,
+        error: outdatedBackend
+          ? 'El backend móvil aún no está desplegado en Render.'
+          : serverError || 'Correo o contraseña incorrectos',
+      };
+    }
+    const container = (json.data && typeof json.data === 'object' ? json.data : json) as Record<string, unknown>;
+    await storeNativeTokens(container);
+    const user = (container.usuario ?? container.user ?? container) as UsuarioDto;
+    if (!user?.id) {
+      return { ok: false, data: null, error: 'Respuesta de autenticación inválida' };
+    }
+    return { ok: true, data: user, error: null };
+  } catch {
+    return {
+      ok: false,
+      data: null,
+      error: navigator.onLine
+        ? 'No se pudo conectar con Render. Comprueba que el servicio esté activo y permita el acceso del APK.'
+        : 'Sin conexión a internet.',
+    };
+  }
+}
+
+async function mobileCompatibilityRequest(): Promise<ApiResponse<{ ready: boolean }>> {
+  if (!isNative) return { ok: true, data: { ready: true }, error: null };
+  if (!navigator.onLine) return { ok: false, data: null, error: 'Sin conexión a internet' };
+  try {
+    const response = await fetch(apiUrl('/api/v1/mobile-auth/oauth-contract'));
+    if (!response.ok || !(response.headers.get('content-type') || '').includes('application/json')) {
+      return {
+        ok: false,
+        data: null,
+        error: 'El backend móvil pendiente todavía no está desplegado.',
+      };
+    }
+    return { ok: true, data: { ready: true }, error: null };
+  } catch {
+    return { ok: false, data: null, error: 'No se pudo contactar con el backend de Render.' };
+  }
+}
+
+async function logoutRequest(): Promise<ApiResponse<void>> {
+  if (!isNative) {
+    return request<void>('/api/v1/auth/logout', { method: 'POST', body: '{}' });
+  }
+  try {
+    await refreshNativeAccessToken();
+    const refreshToken = await getNativeRefreshToken();
+    await nativeAuthorizedFetch('/api/v1/mobile-auth/logout', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ refreshToken }),
+    });
+  } finally {
+    await clearNativeTokens();
+  }
+  return { ok: true, data: null, error: null };
+}
+
+async function queuedLegacyMutation(
+  kind: OfflineMutationKind,
+  label: string,
+  path: string,
+  body: Record<string, unknown>,
+  optimistic: () => void,
+): Promise<{ data: { mensaje: string } | null; error: string | null }> {
+  const queue = async () => {
+    optimistic();
+    await enqueue({
+      kind,
+      label,
+      method: 'POST',
+      path,
+      body: JSON.stringify(body),
+    });
+    notifyOfflineQueueChanged();
+    return { data: { mensaje: QUEUED_MSG }, error: null };
+  };
+  if (isBrowserOffline()) return queue();
+  const result = await legacyJson<{ mensaje: string }>(path, {
+    method: 'POST',
+    body: JSON.stringify(body),
+  });
+  return result.error === OFFLINE_MSG ? queue() : result;
+}
+
+export const api = {
+  me: () => request<UsuarioDto>('/api/v1/session/me'),
+  login: loginRequest,
+  mobileCompatibility: mobileCompatibilityRequest,
   adminLogin: (correo: string, contrasena: string) =>
     request<UsuarioDto>('/api/v1/auth/admin-login', {
       method: 'POST',
       body: JSON.stringify({ correo, contrasena }),
     }),
-  logout: () => request<void>('/api/v1/auth/logout', { method: 'POST', body: '{}' }),
+  logout: logoutRequest,
   oauthProviders: () => request<string[]>('/api/v1/auth/oauth-providers'),
   register: (payload: {
     nombre: string;
@@ -303,7 +487,14 @@ export const api = {
         path: `/api/v1/activities/${id}`,
         init: { method: 'PUT', body },
         entityId: id,
+        expectedVersion:
+          readApiGet<ActividadDetail>(`/api/v1/activities/${id}`)?.version
+          ?? readApiGet<ActividadListItem[]>('/api/v1/activities')?.find((activity) => activity.id === id)?.version,
         optimistic: () => {
+          const existing =
+            readApiGet<ActividadDetail>(`/api/v1/activities/${id}`)
+            ?? readApiGet<ActividadListItem[]>('/api/v1/activities')?.find((activity) => activity.id === id);
+          if (!existing) return { ok: false, data: null, error: 'Actividad no disponible offline' };
           applyActivityUpdate(id, payload);
           const detail = readApiGet<ActividadDetail>(`/api/v1/activities/${id}`);
           return detail
@@ -320,7 +511,14 @@ export const api = {
         path: `/api/v1/activities/${id}/status`,
         init: { method: 'PATCH', body },
         entityId: id,
+        expectedVersion:
+          readApiGet<ActividadDetail>(`/api/v1/activities/${id}`)?.version
+          ?? readApiGet<ActividadListItem[]>('/api/v1/activities')?.find((activity) => activity.id === id)?.version,
         optimistic: () => {
+          const existing =
+            readApiGet<ActividadDetail>(`/api/v1/activities/${id}`)
+            ?? readApiGet<ActividadListItem[]>('/api/v1/activities')?.find((activity) => activity.id === id);
+          if (!existing) return { ok: false, data: null, error: 'Actividad no disponible offline' };
           applyActivityStatus(id, estado);
           const list = readApiGet<ActividadListItem[]>('/api/v1/activities');
           const item = list?.find((a) => a.id === id);
@@ -337,6 +535,9 @@ export const api = {
         path: `/api/v1/activities/${id}`,
         init: { method: 'DELETE' },
         entityId: id,
+        expectedVersion:
+          readApiGet<ActividadDetail>(`/api/v1/activities/${id}`)?.version
+          ?? readApiGet<ActividadListItem[]>('/api/v1/activities')?.find((activity) => activity.id === id)?.version,
         optimistic: () => {
           applyActivityDelete(id);
           return { ok: true, data: null, error: null };
@@ -352,7 +553,14 @@ export const api = {
         path: `/api/v1/activities/${id}/reschedule`,
         init: { method: 'POST', body },
         entityId: id,
+        expectedVersion:
+          readApiGet<ActividadDetail>(`/api/v1/activities/${id}`)?.version
+          ?? readApiGet<ActividadListItem[]>('/api/v1/activities')?.find((activity) => activity.id === id)?.version,
         optimistic: () => {
+          const existing =
+            readApiGet<ActividadDetail>(`/api/v1/activities/${id}`)
+            ?? readApiGet<ActividadListItem[]>('/api/v1/activities')?.find((activity) => activity.id === id);
+          if (!existing) return { ok: false, data: null, error: 'Actividad no disponible offline' };
           applyActivityReschedule(id, fecha, hora);
           const detail = readApiGet<ActividadDetail>(`/api/v1/activities/${id}`);
           return detail
@@ -365,12 +573,13 @@ export const api = {
 
   ia: {
     chat: async (mensaje: string, historial?: { rol: string; contenido: string }[]) => {
-      const res = await fetch(`${API_BASE}/api/ia/chat`, {
+      const res = await nativeAuthorizedFetch('/api/ia/chat', {
         method: 'POST',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           mensaje,
+          idempotencyKey: crypto.randomUUID(),
           historial: (historial ?? []).map((m) => ({
             role: m.rol === 'user' ? 'user' : 'assistant',
             text: m.contenido,
@@ -383,7 +592,7 @@ export const api = {
       return { ok: true, data: json as { respuesta: string; ia?: boolean; fallback?: boolean }, error: null };
     },
     status: async () => {
-      const res = await fetch(`${API_BASE}/api/ia/status`, { credentials: 'include' });
+      const res = await nativeAuthorizedFetch('/api/ia/status', { credentials: 'include' });
       const json = await res.json();
       if (json.ok === false) return { ok: false, data: null, error: json.error || 'No autenticado' };
       return {
@@ -392,41 +601,91 @@ export const api = {
         error: null,
       };
     },
-    activityResources: async (id: number) => {
-      const res = await fetch(`${API_BASE}/api/ia/recursos-actividad/${id}`, { credentials: 'include' });
-      const json = await res.json();
-      if (json.ok === false) return { ok: false, data: null, error: json.mensaje || 'Error' };
-      return {
-        ok: true,
-        data: json as { recursos?: { titulo: string; url?: string; descripcion?: string }[] },
-        error: null,
-      };
-    },
+  },
+
+  assistant: {
+    message: (
+      mensaje: string,
+      historial?: { rol: string; contenido: string }[],
+    ) =>
+      rawRequest<AssistantMessageResponse>('/api/v1/assistant/messages', {
+        method: 'POST',
+        body: JSON.stringify({
+          mensaje,
+          historial: (historial ?? []).map((m) => ({
+            role: m.rol === 'user' ? 'user' : 'assistant',
+            text: m.contenido,
+          })),
+        }),
+      }),
+    confirm: (proposalId: string) =>
+      rawRequest<AssistantProposal>(
+        `/api/v1/assistant/actions/${encodeURIComponent(proposalId)}/confirm`,
+        { method: 'POST', body: '{}' },
+      ),
+    cancel: (proposalId: string) =>
+      rawRequest<AssistantProposal>(
+        `/api/v1/assistant/actions/${encodeURIComponent(proposalId)}/cancel`,
+        { method: 'POST', body: '{}' },
+      ),
   },
 
   notifications: {
     list: () => request<NotificationItem[]>('/api/v1/notifications'),
     unreadCount: () => request<{ count: number }>('/api/v1/notifications/unread-count'),
     markRead: (id: number) =>
-      request<{ ok: boolean; count: number }>(`/api/v1/notifications/${id}/read`, {
-        method: 'POST',
-        body: '{}',
+      queuedRequest<{ ok: boolean; count: number }>({
+        kind: 'notification.read',
+        label: 'Marcar notificación como leída',
+        path: `/api/v1/notifications/${id}/read`,
+        init: { method: 'POST', body: '{}' },
+        entityId: id,
+        optimistic: () => {
+          applyNotificationRead(id);
+          const count = readApiGet<{ count: number }>('/api/v1/notifications/unread-count')?.count ?? 0;
+          return { ok: true, data: { ok: true, count }, error: null };
+        },
       }),
     markAllRead: () =>
-      request<{ ok: boolean; count: number }>('/api/v1/notifications/read-all', {
-        method: 'POST',
-        body: '{}',
+      queuedRequest<{ ok: boolean; count: number }>({
+        kind: 'notification.readAll',
+        label: 'Marcar todas las notificaciones como leídas',
+        path: '/api/v1/notifications/read-all',
+        init: { method: 'POST', body: '{}' },
+        optimistic: () => {
+          applyNotificationRead();
+          return { ok: true, data: { ok: true, count: 0 }, error: null };
+        },
       }),
     remove: (id: number) =>
-      request<{ ok: boolean; count: number }>(`/api/v1/notifications/${id}`, { method: 'DELETE' }),
+      queuedRequest<{ ok: boolean; count: number }>({
+        kind: 'notification.delete',
+        label: 'Eliminar notificación',
+        path: `/api/v1/notifications/${id}`,
+        init: { method: 'DELETE' },
+        entityId: id,
+        optimistic: () => {
+          applyNotificationDelete(id);
+          const count = readApiGet<{ count: number }>('/api/v1/notifications/unread-count')?.count ?? 0;
+          return { ok: true, data: { ok: true, count }, error: null };
+        },
+      }),
   },
 
   profile: {
     get: () => request<Profile>('/api/v1/profile'),
     update: (payload: UpdateProfilePayload) =>
-      request<Profile>('/api/v1/profile', {
-        method: 'PATCH',
-        body: JSON.stringify(payload),
+      queuedRequest<Profile>({
+        kind: 'profile.update',
+        label: 'Actualizar perfil',
+        path: '/api/v1/profile',
+        init: { method: 'PATCH', body: JSON.stringify(payload) },
+        optimistic: () => {
+          const profile = applyProfileUpdate(payload);
+          return profile
+            ? { ok: true, data: profile, error: null }
+            : { ok: false, data: null, error: 'Abre tu perfil con conexión antes de editarlo offline.' };
+        },
       }),
     changePassword: (contrasenaActual: string, contrasenaNueva: string, contrasenaConfirmacion: string) =>
       request<void>('/api/v1/profile/password', {
@@ -434,14 +693,22 @@ export const api = {
         body: JSON.stringify({ contrasenaActual, contrasenaNueva, contrasenaConfirmacion }),
       }),
     changeTheme: (tema: string) =>
-      request<Profile>('/api/v1/profile/theme', {
-        method: 'PATCH',
-        body: JSON.stringify({ tema }),
+      queuedRequest<Profile>({
+        kind: 'profile.theme',
+        label: 'Cambiar tema',
+        path: '/api/v1/profile/theme',
+        init: { method: 'PATCH', body: JSON.stringify({ tema }) },
+        optimistic: () => {
+          const profile = applyProfileUpdate({ tema });
+          return profile
+            ? { ok: true, data: profile, error: null }
+            : { ok: false, data: null, error: 'Perfil no disponible offline' };
+        },
       }),
     uploadPhoto: async (file: File): Promise<ApiResponse<Profile>> => {
       const form = new FormData();
       form.append('foto', file);
-      const res = await fetch(`${API_BASE}/api/v1/profile/photo`, {
+      const res = await nativeAuthorizedFetch('/api/v1/profile/photo', {
         method: 'POST',
         credentials: 'include',
         body: form,
@@ -463,40 +730,98 @@ export const api = {
       request<CommunityUser[]>(`/api/v1/community/suggestions?limit=${limit}`),
     connections: () => request<UsuarioDto[]>('/api/v1/community/connections'),
     connect: (userId: number) =>
-      request<{ mensaje: string }>('/api/v1/community/connections', {
-        method: 'POST',
-        body: JSON.stringify({ userId }),
+      queuedRequest<{ mensaje: string }>({
+        kind: 'community.connect',
+        label: 'Enviar solicitud de amistad',
+        path: '/api/v1/community/connections',
+        init: { method: 'POST', body: JSON.stringify({ userId }) },
+        entityId: userId,
+        optimistic: () => {
+          applyCommunityConnect(userId);
+          return { ok: true, data: { mensaje: QUEUED_MSG }, error: null };
+        },
       }),
     accept: (conexionId: number) =>
-      request<{ mensaje: string }>(`/api/v1/community/connections/${conexionId}/accept`, {
-        method: 'POST',
-        body: '{}',
+      queuedRequest<{ mensaje: string }>({
+        kind: 'community.accept',
+        label: 'Aceptar solicitud de amistad',
+        path: `/api/v1/community/connections/${conexionId}/accept`,
+        init: { method: 'POST', body: '{}' },
+        entityId: conexionId,
+        optimistic: () => {
+          applyCommunityDecision(conexionId, 'CONECTADO');
+          return { ok: true, data: { mensaje: QUEUED_MSG }, error: null };
+        },
       }),
     reject: (conexionId: number) =>
-      request<{ mensaje: string }>(`/api/v1/community/connections/${conexionId}/reject`, {
-        method: 'POST',
-        body: '{}',
+      queuedRequest<{ mensaje: string }>({
+        kind: 'community.reject',
+        label: 'Rechazar solicitud de amistad',
+        path: `/api/v1/community/connections/${conexionId}/reject`,
+        init: { method: 'POST', body: '{}' },
+        entityId: conexionId,
+        optimistic: () => {
+          applyCommunityDecision(conexionId, 'NINGUNA');
+          return { ok: true, data: { mensaje: QUEUED_MSG }, error: null };
+        },
       }),
     removeConnection: (conexionId: number) =>
-      request<void>(`/api/v1/community/connections/${conexionId}`, { method: 'DELETE' }),
+      queuedRequest<void>({
+        kind: 'community.remove',
+        label: 'Eliminar conexión',
+        path: `/api/v1/community/connections/${conexionId}`,
+        init: { method: 'DELETE' },
+        entityId: conexionId,
+        optimistic: () => {
+          applyCommunityDecision(conexionId, 'NINGUNA');
+          return { ok: true, data: null, error: null };
+        },
+      }),
   },
 
   chat: {
     conversations: () => request<Conversation[]>('/api/v1/chat/conversations'),
     messages: (userId: number) => request<ChatMessage[]>(`/api/v1/chat/messages/${userId}`),
-    send: (destinatarioId: number, contenido: string) =>
-      request<ChatMessage>('/api/v1/chat/messages', {
-        method: 'POST',
-        body: JSON.stringify({ destinatarioId, contenido }),
-      }),
+    send: (destinatarioId: number, contenido: string) => {
+      const tempId = allocateTempId();
+      return queuedRequest<ChatMessage>({
+        kind: 'chat.send',
+        label: 'Enviar mensaje',
+        path: '/api/v1/chat/messages',
+        init: { method: 'POST', body: JSON.stringify({ destinatarioId, contenido }) },
+        tempId,
+        optimistic: () => ({
+          ok: true,
+          data: applyChatSend(destinatarioId, contenido, tempId),
+          error: null,
+        }),
+      });
+    },
     markRead: (userId: number) =>
-      request<{ updated: number }>(`/api/v1/chat/messages/${userId}/read`, {
-        method: 'POST',
-        body: '{}',
+      queuedRequest<{ updated: number }>({
+        kind: 'chat.read',
+        label: 'Marcar conversación como leída',
+        path: `/api/v1/chat/messages/${userId}/read`,
+        init: { method: 'POST', body: '{}' },
+        entityId: userId,
+        optimistic: () => {
+          applyChatRead(userId);
+          return { ok: true, data: { updated: 0 }, error: null };
+        },
       }),
     unreadCount: () => request<{ count: number }>('/api/v1/chat/unread-count'),
     deleteConversation: (userId: number) =>
-      request<{ deleted: number }>(`/api/v1/chat/conversations/${userId}`, { method: 'DELETE' }),
+      queuedRequest<{ deleted: number }>({
+        kind: 'chat.delete',
+        label: 'Eliminar conversación',
+        path: `/api/v1/chat/conversations/${userId}`,
+        init: { method: 'DELETE' },
+        entityId: userId,
+        optimistic: () => {
+          applyChatDelete(userId);
+          return { ok: true, data: { deleted: 0 }, error: null };
+        },
+      }),
   },
 
   schedule: {
@@ -525,7 +850,11 @@ export const api = {
         path: `/api/v1/schedule/blocks/${id}`,
         init: { method: 'PUT', body },
         entityId: id,
+        expectedVersion: readApiGet<ScheduleBlock[]>('/api/v1/schedule/blocks')
+          ?.find((block) => block.id === id)?.version,
         optimistic: () => {
+          const existing = readApiGet<ScheduleBlock[]>('/api/v1/schedule/blocks')?.find((block) => block.id === id);
+          if (!existing) return { ok: false, data: null, error: 'Clase no disponible offline' };
           applyScheduleUpdate(id, payload);
           const list = readApiGet<ScheduleBlock[]>('/api/v1/schedule/blocks');
           const block = list?.find((b) => b.id === id);
@@ -542,6 +871,8 @@ export const api = {
         path: `/api/v1/schedule/blocks/${id}`,
         init: { method: 'DELETE' },
         entityId: id,
+        expectedVersion: readApiGet<ScheduleBlock[]>('/api/v1/schedule/blocks')
+          ?.find((block) => block.id === id)?.version,
         optimistic: () => {
           applyScheduleDelete(id);
           return { ok: true, data: null, error: null };
@@ -595,14 +926,20 @@ export const api = {
       return legacyJson<StressReport>(`/api/bienestar/estres${qs}`);
     },
     savePomodoro: (duracion: number) =>
-      legacyJson<{ mensaje: string }>('/api/bienestar/pomodoro', {
-        method: 'POST',
-        body: JSON.stringify({ duracion }),
-      }),
+      queuedLegacyMutation(
+        'wellbeing.pomodoro',
+        'Registrar sesión Pomodoro',
+        '/api/bienestar/pomodoro',
+        { duracion },
+        () => applyWellbeingRecord('POMODORO', duracion),
+      ),
     savePause: (tipo: string, duracion: number) =>
-      legacyJson<{ mensaje: string }>('/api/bienestar/pausa', {
-        method: 'POST',
-        body: JSON.stringify({ tipo, duracion }),
-      }),
+      queuedLegacyMutation(
+        'wellbeing.pause',
+        'Registrar pausa',
+        '/api/bienestar/pausa',
+        { tipo, duracion },
+        () => applyWellbeingRecord('PAUSA', duracion, tipo),
+      ),
   },
 };

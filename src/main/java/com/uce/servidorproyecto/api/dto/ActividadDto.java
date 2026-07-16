@@ -10,6 +10,7 @@ import java.util.List;
 
 public record ActividadDto(
         Long id,
+        Long version,
         String titulo,
         String descripcion,
         String tipo,
@@ -36,6 +37,7 @@ public record ActividadDto(
         }
         return new ActividadDto(
                 a.getId(),
+                a.getVersion(),
                 a.getTitulo(),
                 a.getDescripcion(),
                 a.getTipo(),

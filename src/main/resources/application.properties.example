@@ -59,3 +59,14 @@ app.oauth.google-client-secret=${GOOGLE_CLIENT_SECRET:}
 app.oauth.microsoft-client-id=${MICROSOFT_CLIENT_ID:}
 app.oauth.microsoft-client-secret=${MICROSOFT_CLIENT_SECRET:}
 
+# Autenticación móvil. El valor por defecto del código es exclusivamente para desarrollo.
+mobile.auth.jwt-secret=${MOBILE_JWT_SECRET:dev-only-mobile-jwt-secret-change-before-production-2026}
+mobile.auth.access-ttl=${MOBILE_ACCESS_TTL:15m}
+mobile.auth.refresh-ttl=${MOBILE_REFRESH_TTL:30d}
+mobile.auth.issuer=${MOBILE_JWT_ISSUER:flowday-api}
+# Orígenes exactos separados por coma; nunca usar "*" con credenciales.
+mobile.auth.allowed-origins=${MOBILE_ALLOWED_ORIGINS:https://localhost,capacitor://localhost,http://localhost:5173}
+mobile.auth.oauth-callback=${MOBILE_OAUTH_CALLBACK:com.uce.flowday://auth/callback}
+# OAuth móvil futuro: usar authorization-code + PKCE y un callback/deep-link dedicado.
+# No reutilizar /login/oauth2/**, que conserva la sesión/cookie del flujo web.
+

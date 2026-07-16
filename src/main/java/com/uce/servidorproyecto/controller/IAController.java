@@ -168,31 +168,6 @@ public class IAController {
         return historial;
     }
 
-    // ===== RECURSOS PARA ACTIVIDAD =====
-    @GetMapping("/recursos-actividad/{id}")
-    public Map<String, Object> recursosActividad(@PathVariable Long id, WebRequest request) {
-        Usuario usuario = ApiAuthHelper.requireUser(request);
-        if (usuario == null) {
-            return Map.of("ok", false, "mensaje", "Sesión expirada");
-        }
-        Actividad actividad = actividadService.buscarPorId(id);
-        if (actividad == null || !actividadService.puedeAcceder(usuario, actividad)) {
-            return Map.of("ok", false, "mensaje", "Actividad no encontrada o sin permiso");
-        }
-        if (!actividadService.aplicaRecursosIa(actividad)) {
-            return Map.of(
-                    "ok", true,
-                    "aplicaRecursosIa", false,
-                    "recursos", List.of(),
-                    "mensaje", "Recursos IA disponibles solo para tareas y exámenes"
-            );
-        }
-        Map<String, Object> resp = new LinkedHashMap<>(iaService.recursosParaActividad(actividad));
-        resp.put("ok", true);
-        resp.put("aplicaRecursosIa", true);
-        return resp;
-    }
-
     // ===== REAGENDAR EN CRISIS =====
     @PostMapping("/reagendar-crisis")
     public Map<String, Object> reagendarCrisis(WebRequest request) {

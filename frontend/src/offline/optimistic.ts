@@ -1,6 +1,13 @@
 import type { ActividadDetail, ActividadListItem, CreateActividadPayload, UpdateActividadPayload } from '../types/activity';
 import type { CreateScheduleBlockPayload, ScheduleBlock } from '../types/schedule';
-import { cacheApiGet, isTempEntityId, readApiGet, removeApiGet, updateApiGet } from './cache';
+import {
+  cacheApiGet,
+  isTempEntityId,
+  readApiGet,
+  removeApiGet,
+  updateApiGet,
+  updateMatchingApiCaches,
+} from './cache';
 
 const DAY_NAMES = ['', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'];
 
@@ -199,6 +206,12 @@ export function applyActivityReschedule(id: number, fecha: string, hora?: string
 export function applyActivityDelete(id: number) {
   removeApiGet(`/api/v1/activities/${id}`);
   patchActivityLists((list) => list.filter((a) => a.id !== id));
+  updateMatchingApiCaches<ActividadListItem[]>(
+    (path) =>
+      path.startsWith('/api/v1/activities/by-date?')
+      || path.startsWith('/api/v1/activities/by-month?'),
+    (list) => list.filter((activity) => activity.id !== id),
+  );
 }
 
 export function replaceActivityTempId(tempId: number, realId: number, detail: ActividadDetail) {

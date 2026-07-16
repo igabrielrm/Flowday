@@ -1,4 +1,7 @@
-const QUEUE_KEY = 'flowday-offline-queue';
+import { readSessionUser } from './cache';
+import { dbDelete, dbGet, dbGetAll, dbPut } from './db';
+
+const LEGACY_QUEUE_KEY = 'flowday-offline-queue';
 const TEMP_ID_KEY = 'flowday-offline-temp-id';
 
 export type OfflineMutationKind =
@@ -9,10 +12,27 @@ export type OfflineMutationKind =
   | 'activity.reschedule'
   | 'schedule.create'
   | 'schedule.update'
-  | 'schedule.delete';
+  | 'schedule.delete'
+  | 'profile.update'
+  | 'profile.theme'
+  | 'wellbeing.pomodoro'
+  | 'wellbeing.pause'
+  | 'community.connect'
+  | 'community.accept'
+  | 'community.reject'
+  | 'community.remove'
+  | 'chat.send'
+  | 'chat.read'
+  | 'chat.delete'
+  | 'notification.read'
+  | 'notification.readAll'
+  | 'notification.delete';
+
+export type OfflineMutationStatus = 'PENDING' | 'SYNCING' | 'CONFLICT' | 'FAILED';
 
 export type OfflineMutation = {
   id: string;
+  userId: string;
   kind: OfflineMutationKind;
   label: string;
   method: 'POST' | 'PUT' | 'PATCH' | 'DELETE';
@@ -21,33 +41,56 @@ export type OfflineMutation = {
   entityId?: number;
   tempId?: number;
   createdAt: number;
+  status: OfflineMutationStatus;
+  attempts: number;
+  dependsOn?: string[];
+  expectedVersion?: number;
+  lastError?: string;
+  serverData?: unknown;
 };
 
-function readRaw(): OfflineMutation[] {
+export function currentOfflineUserId() {
+  return String(readSessionUser()?.id ?? 'anonymous');
+}
+
+async function ensureMigrated(userId: string) {
+  const marker = `legacy-outbox-migrated:${userId}`;
+  if (await dbGet('meta', marker)) return;
   try {
-    const raw = localStorage.getItem(QUEUE_KEY);
-    if (!raw) return [];
-    const parsed = JSON.parse(raw) as OfflineMutation[];
-    return Array.isArray(parsed) ? parsed : [];
+    const raw = localStorage.getItem(LEGACY_QUEUE_KEY);
+    const parsed = raw ? (JSON.parse(raw) as Partial<OfflineMutation>[]) : [];
+    for (const item of parsed) {
+      if (!item.id || !item.kind || !item.path || !item.method) continue;
+      await dbPut('outbox', {
+        ...item,
+        userId,
+        status: 'PENDING',
+        attempts: 0,
+        createdAt: item.createdAt ?? Date.now(),
+      } satisfies OfflineMutation);
+    }
+    localStorage.removeItem(LEGACY_QUEUE_KEY);
   } catch {
-    return [];
+    // A malformed legacy queue is ignored.
   }
+  await dbPut('meta', { id: marker, migratedAt: Date.now() });
 }
 
-function writeRaw(items: OfflineMutation[]) {
-  try {
-    localStorage.setItem(QUEUE_KEY, JSON.stringify(items));
-  } catch {
-    /* quota */
-  }
+export async function readQueue(includeResolved = false): Promise<OfflineMutation[]> {
+  const userId = currentOfflineUserId();
+  await ensureMigrated(userId);
+  const all = await dbGetAll<OfflineMutation>('outbox');
+  return all
+    .filter((item) => item.userId === userId)
+    .filter((item) => includeResolved || item.status === 'PENDING' || item.status === 'SYNCING')
+    .sort((a, b) => a.createdAt - b.createdAt);
 }
 
-export function readQueue(): OfflineMutation[] {
-  return readRaw().sort((a, b) => a.createdAt - b.createdAt);
-}
-
-export function pendingCount(): number {
-  return readRaw().length;
+export async function pendingCount(): Promise<number> {
+  const userId = currentOfflineUserId();
+  await ensureMigrated(userId);
+  const all = await dbGetAll<OfflineMutation>('outbox');
+  return all.filter((item) => item.userId === userId).length;
 }
 
 export function allocateTempId(): number {
@@ -61,24 +104,95 @@ export function allocateTempId(): number {
   }
 }
 
-export function enqueue(
-  mutation: Omit<OfflineMutation, 'id' | 'createdAt'>,
-): OfflineMutation {
+export async function enqueue(
+  mutation: Omit<OfflineMutation, 'id' | 'createdAt' | 'userId' | 'status' | 'attempts'>
+    & Partial<Pick<OfflineMutation, 'status' | 'attempts'>>,
+): Promise<OfflineMutation | null> {
+  const userId = currentOfflineUserId();
+  await ensureMigrated(userId);
+  const existing = await readQueue(true);
+
+  if (mutation.entityId != null && mutation.entityId < 0 && !mutation.kind.endsWith('.create')) {
+    const creation = existing.find(
+      (item) => item.tempId === mutation.entityId && item.kind.endsWith('.create'),
+    );
+    const canMergeIntoCreate =
+      mutation.kind.endsWith('.update') || mutation.kind === 'activity.reschedule';
+    if (creation && canMergeIntoCreate && mutation.body) {
+      try {
+        const original = creation.body ? JSON.parse(creation.body) as Record<string, unknown> : {};
+        const patch = JSON.parse(mutation.body) as Record<string, unknown>;
+        const merged =
+          mutation.kind === 'activity.reschedule'
+            ? { ...original, fechaInicio: patch.fecha, horaInicio: patch.hora }
+            : { ...original, ...patch };
+        const compacted = { ...creation, body: JSON.stringify(merged), createdAt: Date.now() };
+        await dbPut('outbox', compacted);
+        return compacted;
+      } catch {
+        // Keep both operations when their payload cannot be compacted safely.
+      }
+    }
+  }
+
+  if (mutation.entityId != null && mutation.entityId < 0 && mutation.kind.endsWith('.delete')) {
+    const creation = existing.find(
+      (item) => item.tempId === mutation.entityId && item.kind.endsWith('.create'),
+    );
+    if (creation) {
+      await Promise.all(
+        existing
+          .filter((item) => item.entityId === mutation.entityId || item.tempId === mutation.entityId)
+          .map((item) => dbDelete('outbox', item.id)),
+      );
+      return null;
+    }
+  }
+
+  const superseded = existing.find(
+    (item) =>
+      item.kind === mutation.kind
+      && item.entityId != null
+      && item.entityId === mutation.entityId
+      && item.status !== 'SYNCING',
+  );
+  if (superseded) await dbDelete('outbox', superseded.id);
+  const parentCreation =
+    mutation.entityId != null && mutation.entityId < 0
+      ? existing.find((item) => item.tempId === mutation.entityId && item.kind.endsWith('.create'))
+      : undefined;
+
   const entry: OfflineMutation = {
     ...mutation,
     id: crypto.randomUUID(),
+    userId,
     createdAt: Date.now(),
+    status: mutation.status ?? 'PENDING',
+    attempts: mutation.attempts ?? 0,
+    dependsOn: mutation.dependsOn ?? (parentCreation ? [parentCreation.id] : undefined),
   };
-  writeRaw([...readRaw(), entry]);
+  await dbPut('outbox', entry);
   return entry;
 }
 
 export function removeFromQueue(id: string) {
-  writeRaw(readRaw().filter((item) => item.id !== id));
+  return dbDelete('outbox', id);
 }
 
-export function remapTempId(tempId: number, realId: number) {
-  const updated = readRaw().map((item) => {
+function remapValue(value: unknown, tempId: number, realId: number): unknown {
+  if (value === tempId) return realId;
+  if (Array.isArray(value)) return value.map((item) => remapValue(item, tempId, realId));
+  if (value && typeof value === 'object') {
+    return Object.fromEntries(
+      Object.entries(value).map(([key, item]) => [key, remapValue(item, tempId, realId)]),
+    );
+  }
+  return value;
+}
+
+export async function remapTempId(tempId: number, realId: number) {
+  const current = await readQueue(true);
+  const updated = current.map((item) => {
     let path = item.path;
     let entityId = item.entityId;
     let itemTempId = item.tempId;
@@ -91,17 +205,8 @@ export function remapTempId(tempId: number, realId: number) {
 
     if (item.body) {
       try {
-        const parsed = JSON.parse(item.body) as Record<string, unknown>;
-        let changed = false;
-        for (const key of Object.keys(parsed)) {
-          if (parsed[key] === tempId) {
-            parsed[key] = realId;
-            changed = true;
-          }
-        }
-        if (changed) {
-          return { ...item, path, entityId, tempId: itemTempId, body: JSON.stringify(parsed) };
-        }
+        const parsed = remapValue(JSON.parse(item.body), tempId, realId);
+        return { ...item, path, entityId, tempId: itemTempId, body: JSON.stringify(parsed) };
       } catch {
         /* ignore */
       }
@@ -109,5 +214,31 @@ export function remapTempId(tempId: number, realId: number) {
 
     return { ...item, path, entityId, tempId: itemTempId };
   });
-  writeRaw(updated);
+  await Promise.all(updated.map((item) => dbPut('outbox', item)));
+}
+
+export async function updateMutation(
+  id: string,
+  patch: Partial<
+    Pick<OfflineMutation, 'status' | 'attempts' | 'lastError' | 'serverData' | 'expectedVersion'>
+  >,
+) {
+  const current = await dbGet<OfflineMutation>('outbox', id);
+  if (current) await dbPut('outbox', { ...current, ...patch });
+}
+
+export async function updateEntityVersion(entityId: number, expectedVersion: number) {
+  const current = await readQueue(true);
+  await Promise.all(
+    current
+      .filter((item) => item.entityId === entityId && item.status !== 'CONFLICT')
+      .map((item) => dbPut('outbox', { ...item, expectedVersion })),
+  );
+}
+
+export async function discardUserOutbox(userId = currentOfflineUserId()) {
+  const all = await dbGetAll<OfflineMutation>('outbox');
+  await Promise.all(
+    all.filter((item) => item.userId === userId).map((item) => dbDelete('outbox', item.id)),
+  );
 }

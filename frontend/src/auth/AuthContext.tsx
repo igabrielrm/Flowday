@@ -2,6 +2,8 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState } 
 import { api, UsuarioDto } from '../api/client';
 import { applyTheme } from '../types/profile';
 import { cacheSessionUser, clearSessionUser, readSessionUser } from '../offline/cache';
+import { isNative } from '../platform';
+import { pendingCount } from '../offline/queue';
 
 type AuthContextValue = {
   user: UsuarioDto | null;
@@ -48,7 +50,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const logout = useCallback(async () => {
-    if (navigator.onLine) {
+    const pending = await pendingCount();
+    if (
+      pending > 0
+      && !window.confirm(
+        `Tienes ${pending} cambio(s) pendiente(s) de sincronizar. `
+          + 'Si cierras sesión se conservarán, pero solo se enviarán cuando vuelvas a entrar con esta cuenta. ¿Continuar?',
+      )
+    ) {
+      return;
+    }
+    if (navigator.onLine || isNative) {
       await api.logout();
     }
     clearSessionUser();

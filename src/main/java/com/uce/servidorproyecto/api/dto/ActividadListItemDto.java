@@ -6,6 +6,7 @@ import com.uce.servidorproyecto.service.ActividadService;
 
 public record ActividadListItemDto(
         Long id,
+        Long version,
         String titulo,
         String tipo,
         String estado,
@@ -22,6 +23,7 @@ public record ActividadListItemDto(
         var map = service.toListaMap(actividad, usuario);
         return new ActividadListItemDto(
                 actividad.getId(),
+                actividad.getVersion(),
                 actividad.getTitulo(),
                 actividad.getTipo(),
                 String.valueOf(map.get("estado")),

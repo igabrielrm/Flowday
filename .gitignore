@@ -37,12 +37,14 @@ src/main/resources/application.properties
 .env
 .env.*
 !.env.example
+!frontend/.env.android
 logs/
 uploads/
 
 ### Frontend SPA ###
 frontend/node_modules/
 frontend/dist/
+frontend/dist-android/
 
 ### OS ###
 .DS_Store

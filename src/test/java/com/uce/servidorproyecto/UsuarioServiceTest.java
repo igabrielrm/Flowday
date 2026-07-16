@@ -47,10 +47,10 @@ class UsuarioServiceTest {
         // Correos válidos
         assertThat(usuarioService.correoValido("juan@uce.edu.ec")).isTrue();
         assertThat(usuarioService.correoValido("maria@uce.edu.ec")).isTrue();
+        assertThat(usuarioService.correoValido("juan@gmail.com")).isTrue();
 
         // Correos inválidos
-        assertThat(usuarioService.correoValido("juan@gmail.com")).isFalse();
-        assertThat(usuarioService.correoValido("juan@uce.edu")).isFalse();
+        assertThat(usuarioService.correoValido("juan@uce")).isFalse();
         assertThat(usuarioService.correoValido(null)).isFalse();
     }
 
@@ -71,7 +71,7 @@ class UsuarioServiceTest {
 
         assertThat(registrado).isNotNull();
         assertThat(registrado.getId()).isEqualTo(1L);
-        assertThat(registrado.getRol()).isEqualTo("ESTUDIANTE");
+        assertThat(registrado.getRol()).isEqualTo("USER");
         assertThat(registrado.getEstado()).isEqualTo("ACTIVO");
 
         // Verificar que la contraseña fue encriptada

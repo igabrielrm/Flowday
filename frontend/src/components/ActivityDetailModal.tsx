@@ -11,10 +11,6 @@ import {
   DialogTitle,
   Divider,
   IconButton,
-  Link,
-  List,
-  ListItem,
-  ListItemText,
   Stack,
   Typography,
   useTheme,
@@ -31,8 +27,6 @@ type Props = {
   onChanged?: () => void;
 };
 
-type Resource = { titulo: string; url?: string; descripcion?: string };
-
 function estadoChipColor(estado: string): 'default' | 'success' | 'warning' | 'info' {
   if (estado === 'COMPLETADA') return 'success';
   if (estado === 'EN_PROCESO') return 'info';
@@ -44,7 +38,6 @@ export default function ActivityDetailModal({ activityId, onClose, onChanged }: 
   const navigate = useNavigate();
   const theme = useTheme();
   const [detail, setDetail] = useState<ActividadDetail | null>(null);
-  const [resources, setResources] = useState<Resource[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -52,12 +45,11 @@ export default function ActivityDetailModal({ activityId, onClose, onChanged }: 
   useEffect(() => {
     if (!activityId) {
       setDetail(null);
-      setResources([]);
       return;
     }
     setLoading(true);
     setError(null);
-    api.activities.get(activityId).then(async (res) => {
+    api.activities.get(activityId).then((res) => {
       if (!res.ok || !res.data) {
         setError(res.error || 'No se pudo cargar la actividad');
         setDetail(null);
@@ -65,10 +57,6 @@ export default function ActivityDetailModal({ activityId, onClose, onChanged }: 
         return;
       }
       setDetail(res.data);
-      if (res.data.tipo === 'DEBER' || res.data.tipo === 'EXAMEN') {
-        const ia = await api.ia.activityResources(activityId);
-        if (ia.ok && ia.data?.recursos) setResources(ia.data.recursos);
-      }
       setLoading(false);
     });
   }, [activityId]);
@@ -161,34 +149,6 @@ export default function ActivityDetailModal({ activityId, onClose, onChanged }: 
               </>
             )}
 
-            {resources.length > 0 && (
-              <>
-                <Divider />
-                <Box>
-                  <Typography variant="subtitle2" fontWeight={700} gutterBottom>
-                    Recursos recomendados
-                  </Typography>
-                  <List dense disablePadding>
-                    {resources.map((r, i) => (
-                      <ListItem key={i} disableGutters sx={{ py: 0.5 }}>
-                        <ListItemText
-                          primary={
-                            r.url ? (
-                              <Link href={r.url} target="_blank" rel="noreferrer">
-                                {r.titulo}
-                              </Link>
-                            ) : (
-                              r.titulo
-                            )
-                          }
-                          secondary={r.descripcion}
-                        />
-                      </ListItem>
-                    ))}
-                  </List>
-                </Box>
-              </>
-            )}
           </Stack>
         ) : null}
       </DialogContent>

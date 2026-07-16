@@ -2,6 +2,7 @@ package com.uce.servidorproyecto.api.dto;
 
 public record ScheduleBlockDto(
         Long id,
+        Long version,
         String materia,
         Integer diaSemana,
         String diaNombre,
