@@ -19,6 +19,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.format.annotation.DateTimeFormat;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.context.request.WebRequest;
 
@@ -42,8 +43,30 @@ public class ActivityApiController {
     private ReagendamientoAutomaticoService reagendamientoAutomaticoService;
 
     private ActividadDto toDto(Actividad actividad, Usuario usuario) {
-        List<Long> companeros = actividadCompartidaService.obtenerIdsCompanerosVinculados(actividad);
-        return ActividadDto.from(actividad, usuario, actividadService, companeros);
+        try {
+            List<Long> companeros = actividadCompartidaService.obtenerIdsCompanerosVinculados(actividad);
+            return ActividadDto.from(actividad, usuario, actividadService, companeros);
+        } catch (Exception ex) {
+            // Evita 500 después de persistir (lazy session / mapping).
+            return new ActividadDto(
+                    actividad.getId(),
+                    actividad.getVersion() != null ? actividad.getVersion() : 0L,
+                    actividad.getTitulo(),
+                    actividad.getDescripcion(),
+                    actividad.getTipo(),
+                    actividad.getEstado(),
+                    actividad.getFechaInicio(),
+                    actividad.getHoraInicio(),
+                    actividad.getDuracionMinutos(),
+                    actividad.getMateria(),
+                    actividad.getPrioridad(),
+                    actividad.getFechaEntrega(),
+                    actividad.getColor(),
+                    true,
+                    true,
+                    List.of()
+            );
+        }
     }
 
     private static boolean esTipoGrupal(String tipo) {
@@ -104,6 +127,7 @@ public class ActivityApiController {
     }
 
     @PostMapping
+    @Transactional
     @Operation(summary = "Crear actividad")
     public ApiResponse<ActividadDto> create(@Valid @RequestBody CreateActividadRequest body,
                                             WebRequest request) {

@@ -8,6 +8,8 @@ La URL se configura en `.env.android`. No agregues secretos a ese archivo: las v
 
 Antes de desplegar el backend en Render, configura `MOBILE_JWT_SECRET` con un valor aleatorio de al menos 32 caracteres. El backend de producción no inicia con el secreto de desarrollo. Opcionalmente configura `MOBILE_ALLOWED_ORIGINS`; el valor predeterminado ya acepta `https://localhost` y `capacitor://localhost`.
 
+La app Android programa **notificaciones locales** (clase 15 min antes, actividad 1 h antes, prioridad alta el día anterior a las 08:00). Una vez programadas en el dispositivo, suenan aunque no haya internet; para reprogramar hace falta abrir la app (con datos en caché o en línea) y conceder el permiso de notificaciones.
+
 ## Compilar localmente
 
 Requisitos:

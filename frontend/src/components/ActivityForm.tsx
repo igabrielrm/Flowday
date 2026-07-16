@@ -27,6 +27,7 @@ import {
   isGroupActivityType,
 } from '../types/activity';
 import ColorSwatchPicker from './ColorSwatchPicker';
+import { localDateIso } from '../utils/localDate';
 
 export type ActivityFormValues = {
   titulo: string;
@@ -50,7 +51,7 @@ type Props = {
 };
 
 function todayIso() {
-  return new Date().toISOString().slice(0, 10);
+  return localDateIso();
 }
 
 export default function ActivityForm({

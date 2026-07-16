@@ -21,6 +21,7 @@ import AdminDashboardPage from './pages/admin/AdminDashboardPage';
 import AdminLoginPage from './pages/admin/AdminLoginPage';
 import AccessDeniedPage from './pages/AccessDeniedPage';
 import { NotificationsProvider } from './notifications/NotificationsContext';
+import LocalRemindersBridge from './notifications/LocalRemindersBridge';
 import NativeAppBridge from './components/NativeAppBridge';
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
@@ -65,6 +66,7 @@ export default function App() {
         element={
           <ProtectedRoute>
             <NotificationsProvider>
+              <LocalRemindersBridge />
               <AppLayout />
             </NotificationsProvider>
           </ProtectedRoute>

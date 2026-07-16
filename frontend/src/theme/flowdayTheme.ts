@@ -64,7 +64,7 @@ export function createFlowdayTheme(mode: 'light' | 'dark') {
               zIndex: -1,
               pointerEvents: 'none',
               background: isLight
-                ? 'linear-gradient(180deg, rgba(255,255,255,0.08) 0%, rgba(241,245,249,0.18) 100%)'
+                ? 'linear-gradient(180deg, rgba(244,247,251,0.78) 0%, rgba(241,245,249,0.88) 55%, rgba(226,232,240,0.92) 100%)'
                 : 'linear-gradient(180deg, rgba(2,6,23,0.55) 0%, rgba(2,6,23,0.72) 100%)',
             },
           },

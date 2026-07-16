@@ -24,25 +24,22 @@ import { glassChip, glassField, glassSurface } from '../theme/glass';
 import { useDebouncedValue } from '../hooks/useDebouncedValue';
 import type { ActividadListItem } from '../types/activity';
 import { ACTIVITY_STATES, estadoLabel, formatDate, tipoLabel } from '../types/activity';
+import { localDateIso, shiftLocalDateIso } from '../utils/localDate';
 
 type DateFilter = 'ALL' | 'TODAY' | 'TOMORROW' | 'WEEK';
 type SortKey = 'titulo' | 'fecha';
 type SortDir = 'asc' | 'desc';
 
 function todayIso() {
-  return new Date().toISOString().slice(0, 10);
+  return localDateIso();
 }
 
 function tomorrowIso() {
-  const d = new Date();
-  d.setDate(d.getDate() + 1);
-  return d.toISOString().slice(0, 10);
+  return shiftLocalDateIso(localDateIso(), 1);
 }
 
 function weekEndIso() {
-  const d = new Date();
-  d.setDate(d.getDate() + 7);
-  return d.toISOString().slice(0, 10);
+  return shiftLocalDateIso(localDateIso(), 7);
 }
 
 function estadoChipColor(estado: string): 'default' | 'success' | 'warning' | 'info' {

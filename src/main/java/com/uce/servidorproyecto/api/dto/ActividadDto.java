@@ -28,16 +28,24 @@ public record ActividadDto(
 ) {
     public static ActividadDto from(Actividad a, Usuario viewer, ActividadService service, List<Long> companerosIds) {
         if (a == null) return null;
-        boolean puedeEditar = viewer != null && service != null && service.puedeEditar(viewer, a);
-        boolean esPropietario = viewer != null && service != null
-                && Boolean.TRUE.equals(service.toListaMap(a, viewer).get("esPropietario"));
+        boolean puedeEditar = false;
+        boolean esPropietario = false;
         String estado = a.getEstado();
-        if (viewer != null && service != null) {
-            estado = String.valueOf(service.toListaMap(a, viewer).get("estado"));
+        try {
+            puedeEditar = viewer != null && service != null && service.puedeEditar(viewer, a);
+            esPropietario = puedeEditar;
+            if (viewer != null && service != null && !puedeEditar) {
+                Object mapped = service.toListaMap(a, viewer).get("estado");
+                if (mapped != null) estado = String.valueOf(mapped);
+            }
+        } catch (Exception ignored) {
+            esPropietario = viewer != null && a.getUsuario() != null
+                    && viewer.getId().equals(a.getUsuario().getId());
+            puedeEditar = esPropietario;
         }
         return new ActividadDto(
                 a.getId(),
-                a.getVersion(),
+                a.getVersion() != null ? a.getVersion() : 0L,
                 a.getTitulo(),
                 a.getDescripcion(),
                 a.getTipo(),

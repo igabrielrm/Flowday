@@ -25,15 +25,14 @@ import { glassButton, glassSurface } from '../theme/glass';
 import type { ActividadListItem, PriorityAlert } from '../types/activity';
 import { estadoLabel, formatDate, tipoLabel } from '../types/activity';
 import type { ScheduleAlert } from '../types/schedule';
+import { localDateIso, shiftLocalDateIso } from '../utils/localDate';
 
 function todayIso() {
-  return new Date().toISOString().slice(0, 10);
+  return localDateIso();
 }
 
 function shiftDate(iso: string, days: number) {
-  const d = new Date(iso + 'T12:00:00');
-  d.setDate(d.getDate() + days);
-  return d.toISOString().slice(0, 10);
+  return shiftLocalDateIso(iso, days);
 }
 
 function agendaTitle(viewDate: string): string {
