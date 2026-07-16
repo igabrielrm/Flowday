@@ -14,8 +14,8 @@ public class BloqueRecurrente {
     private Long id;
 
     @Version
-    @Column(nullable = false)
-    private Long version;
+    @Column(nullable = false, columnDefinition = "bigint not null default 0")
+    private Long version = 0L;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "usuario_id", nullable = false)

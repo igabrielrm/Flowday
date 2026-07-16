@@ -1,9 +1,10 @@
 package com.uce.servidorproyecto.config;
 
+import jakarta.annotation.PostConstruct;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.boot.context.event.ApplicationReadyEvent;
-import org.springframework.context.event.EventListener;
+import org.springframework.core.Ordered;
+import org.springframework.core.annotation.Order;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
 
@@ -13,8 +14,11 @@ import java.sql.DatabaseMetaData;
 
 /**
  * Aplica parches de esquema cuando ddl-auto no actualiza tablas existentes en PostgreSQL.
+ * Debe ejecutarse temprano (@PostConstruct) para que schedulers y APIs no fallen
+ * por columnas nuevas como {@code version}.
  */
 @Component
+@Order(Ordered.HIGHEST_PRECEDENCE)
 public class DatabaseSchemaPatcher {
 
     private static final Logger log = LoggerFactory.getLogger(DatabaseSchemaPatcher.class);
@@ -27,7 +31,7 @@ public class DatabaseSchemaPatcher {
         this.dataSource = dataSource;
     }
 
-    @EventListener(ApplicationReadyEvent.class)
+    @PostConstruct
     public void aplicarParches() {
         if (!esPostgreSQL()) {
             return;
@@ -65,6 +69,9 @@ public class DatabaseSchemaPatcher {
             agregarColumnaSiFalta("reagendamiento_log", "mensaje_asistente", "VARCHAR(500) DEFAULT ''");
 
             agregarColumnaSiFalta("actividades", "peso_prioridad", "INTEGER");
+            // Optimistic locking offline sync (@Version). DEFAULT 0 para filas existentes.
+            agregarColumnaSiFalta("actividades", "version", "BIGINT NOT NULL DEFAULT 0");
+            agregarColumnaSiFalta("horarios_clase", "version", "BIGINT NOT NULL DEFAULT 0");
 
             relajarColumnaLegacy("reagendamiento_log", "mensaje_asistente");
 
@@ -89,7 +96,7 @@ public class DatabaseSchemaPatcher {
     private void agregarColumnaSiFalta(String tabla, String columna, String definicion) {
         Boolean existe = jdbcTemplate.queryForObject(
                 "SELECT EXISTS (SELECT 1 FROM information_schema.columns " +
-                "WHERE table_name = ? AND column_name = ?)",
+                "WHERE table_schema = current_schema() AND table_name = ? AND column_name = ?)",
                 Boolean.class,
                 tabla.toLowerCase(),
                 columna.toLowerCase()
@@ -103,7 +110,7 @@ public class DatabaseSchemaPatcher {
     private void relajarColumnaLegacy(String tabla, String columna) {
         Boolean existe = jdbcTemplate.queryForObject(
                 "SELECT EXISTS (SELECT 1 FROM information_schema.columns " +
-                "WHERE table_name = ? AND column_name = ?)",
+                "WHERE table_schema = current_schema() AND table_name = ? AND column_name = ?)",
                 Boolean.class,
                 tabla.toLowerCase(),
                 columna.toLowerCase()
@@ -123,7 +130,7 @@ public class DatabaseSchemaPatcher {
     private void eliminarColumnaSiExiste(String tabla, String columna) {
         Boolean existe = jdbcTemplate.queryForObject(
                 "SELECT EXISTS (SELECT 1 FROM information_schema.columns " +
-                "WHERE table_name = ? AND column_name = ?)",
+                "WHERE table_schema = current_schema() AND table_name = ? AND column_name = ?)",
                 Boolean.class,
                 tabla.toLowerCase(),
                 columna.toLowerCase()

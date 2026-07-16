@@ -18,8 +18,8 @@ public class Actividad {
     private Long id;
 
     @Version
-    @Column(nullable = false)
-    private Long version;
+    @Column(nullable = false, columnDefinition = "bigint not null default 0")
+    private Long version = 0L;
 
     @ManyToOne
     @JoinColumn(name = "usuario_id", nullable = false)
