@@ -45,6 +45,10 @@ jobs:
         run: npm run android:sync
         working-directory: frontend
 
+      - name: Make Gradle wrapper executable
+        run: chmod +x ./gradlew
+        working-directory: frontend/android
+
       - name: Build debug APK and unsigned release bundle
         run: ./gradlew assembleDebug bundleRelease
         working-directory: frontend/android
