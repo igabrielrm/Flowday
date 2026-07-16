@@ -3,11 +3,14 @@
 # ============================================
 
 # --- Etapa 1: compilar la SPA web ---
-FROM node:22-alpine AS frontend-build
+# bookworm-slim evita fallos conocidos de npm ci en Node 22/Alpine
+# y es compatible con dependencias nativas (p. ej. sharp vía Capacitor).
+FROM node:22-bookworm-slim AS frontend-build
 WORKDIR /app/frontend
 
 COPY frontend/package.json frontend/package-lock.json ./
-RUN npm ci
+# --ignore-scripts: el build web no necesita postinstall nativos (sharp/Capacitor assets).
+RUN npm ci --no-audit --no-fund --ignore-scripts
 
 COPY frontend ./
 RUN npm run build:web
