@@ -71,8 +71,8 @@ export default function WellbeingPage() {
       api.bienestar.stress(),
       api.activities.list(),
     ]);
-    if (statsRes.ok && statsRes.data) setStats(statsRes.data);
-    if (stressRes.ok && stressRes.data) {
+    if (statsRes.data) setStats(statsRes.data);
+    if (stressRes.data) {
       setStress(stressRes.data);
     } else if (stressRes.error) {
       console.error('Error loading stress data:', stressRes.error);

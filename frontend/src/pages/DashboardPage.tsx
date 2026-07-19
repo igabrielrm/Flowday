@@ -69,7 +69,7 @@ export default function DashboardPage() {
     // Load from cache first for instant UI
     const cachedDay = readApiGet<ActividadListItem[]>(`/api/v1/activities/by-date?fecha=${viewDate}`);
     const cachedSched = readApiGet<ScheduleAlert>('/api/v1/schedule/alert');
-    const cachedNotes = readApiGet<Note[]>('/api/v1/notes');
+    const cachedNotes = readApiGet<Note[]>('/api/v1/notas');
     if (cachedDay) setDayItems(cachedDay);
     if (cachedSched) setScheduleAlert(cachedSched);
     if (cachedNotes && cachedNotes.length > 0) {

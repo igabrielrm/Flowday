@@ -24,7 +24,7 @@ const PRIMARY = [
   { value: '/', label: 'Inicio', icon: <HomeOutlinedIcon /> },
   { value: '/activities', label: 'Tareas', icon: <TaskAltOutlinedIcon /> },
   { value: '/schedule', label: 'Horario', icon: <ScheduleOutlinedIcon /> },
-  { value: '/chat', label: 'Chat', icon: <ChatOutlinedIcon /> },
+  { value: '/notes', label: 'Notas', icon: <NoteAltOutlinedIcon /> },
 ] as const;
 
 const MORE = [

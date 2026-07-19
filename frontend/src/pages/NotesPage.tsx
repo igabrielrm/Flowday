@@ -6,6 +6,7 @@ import {
   Dialog,
   DialogContent,
   Fab,
+  Grid,
   IconButton,
   InputBase,
   Paper,
@@ -296,7 +297,7 @@ export default function NotesPage() {
   const load = useCallback(async () => {
     setLoading(true);
     // First try to load from cache for instant UI
-    const cached = readApiGet<Note[]>('/api/v1/notes');
+    const cached = readApiGet<Note[]>('/api/v1/notas');
     if (cached) {
       setNotes(cached);
       setLoading(false);

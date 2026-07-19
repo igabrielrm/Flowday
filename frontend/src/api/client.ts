@@ -888,7 +888,7 @@ export const api = {
   },
 
   notes: {
-    list: () => request<Note[]>('/api/v1/notes'),
+    list: () => request<Note[]>('/api/v1/notas'),
     create: (titulo: string, contenido: string, color: string, pinned = false) => {
       const id = crypto.randomUUID();
       const note = buildOptimisticNote(id, titulo, contenido, color, pinned);
@@ -896,7 +896,7 @@ export const api = {
       return queuedRequest<Note>({
         kind: 'note.create',
         label: `Crear nota: ${titulo}`,
-        path: '/api/v1/notes',
+        path: '/api/v1/notas',
         init: { method: 'POST', body },
         entityId: id,
         optimistic: () => {
@@ -906,20 +906,20 @@ export const api = {
       });
     },
     update: (id: string, patch: Partial<Omit<Note, 'id' | 'createdAt'>>) => {
-      const existing = readApiGet<Note[]>('/api/v1/notes')?.find((n) => n.id === id)
-        ?? readApiGet<Note>(`/api/v1/notes/${id}`);
+      const existing = readApiGet<Note[]>('/api/v1/notas')?.find((n) => n.id === id)
+        ?? readApiGet<Note>(`/api/v1/notas/${id}`);
       const updatedAt = new Date().toISOString();
       const body = JSON.stringify({ id, ...patch, updatedAt });
       return queuedRequest<Note>({
         kind: 'note.update',
         label: `Actualizar nota`,
-        path: `/api/v1/notes/${id}`,
-        init: { method: 'PUT', body },
+        path: '/api/v1/notas',
+        init: { method: 'POST', body },
         entityId: id,
         optimistic: () => {
           if (!existing) return { ok: false, data: null, error: 'Nota no disponible offline' };
           applyNoteUpdate(id, patch);
-          const updated = readApiGet<Note[]>('/api/v1/notes')?.find((n) => n.id === id);
+          const updated = readApiGet<Note[]>('/api/v1/notas')?.find((n) => n.id === id);
           return updated
             ? { ok: true, data: updated, error: null }
             : { ok: false, data: null, error: OFFLINE_MSG };
@@ -930,7 +930,7 @@ export const api = {
       queuedRequest<void>({
         kind: 'note.delete',
         label: 'Eliminar nota',
-        path: `/api/v1/notes/${id}`,
+        path: `/api/v1/notas/${id}`,
         init: { method: 'DELETE' },
         entityId: id,
         optimistic: () => {
@@ -978,10 +978,10 @@ export const api = {
   },
 
   bienestar: {
-    stats: () => request<WellbeingStats>('/api/bienestar/estadisticas'),
+    stats: () => legacyJson<WellbeingStats>('/api/bienestar/estadisticas'),
     stress: (fecha?: string) => {
       const qs = fecha ? `?fecha=${encodeURIComponent(fecha)}` : '';
-      return request<StressReport>(`/api/bienestar/estres${qs}`);
+      return legacyJson<StressReport>(`/api/bienestar/estres${qs}`);
     },
     savePomodoro: (duracion: number) =>
       queuedLegacyMutation(

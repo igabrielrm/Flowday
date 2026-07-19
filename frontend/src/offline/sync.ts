@@ -212,7 +212,7 @@ async function applyServerResult(mutation: OfflineMutation, data: unknown) {
       const note = data as Note;
       if (note) {
         applyNoteUpdate(note.id, note);
-        cacheApiGet(`/api/v1/notes/${note.id}`, note);
+        cacheApiGet(`/api/v1/notas/${note.id}`, note);
       }
       break;
     }

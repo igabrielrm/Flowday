@@ -273,7 +273,7 @@ export function replaceScheduleTempId(tempId: number, realId: number, block: Sch
 
 import type { Note } from '../types/note';
 
-const NOTES_CACHE_KEY = '/api/v1/notes';
+const NOTES_CACHE_KEY = '/api/v1/notas';
 
 export function applyNoteCreate(note: Note) {
   updateApiGet<Note[]>(NOTES_CACHE_KEY, (list) => [
