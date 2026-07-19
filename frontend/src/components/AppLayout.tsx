@@ -235,7 +235,7 @@ export default function AppLayout() {
       </Box>
 
       <MobileBottomNav />
-      <VirtualCompanion fabOnTop={location.pathname === '/chat'} />
+      <VirtualCompanion fabOnTop={location.pathname === '/chat' || location.pathname === '/notes'} />
     </Box>
   );
 }

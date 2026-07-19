@@ -29,7 +29,7 @@ const PRIMARY = [
 
 const MORE = [
   { value: '/calendar', label: 'Calendario', icon: <CalendarMonthOutlinedIcon fontSize="small" /> },
-  { value: '/notes', label: 'Notas', icon: <NoteAltOutlinedIcon fontSize="small" /> },
+  { value: '/chat', label: 'Chat', icon: <ChatOutlinedIcon fontSize="small" /> },
   { value: '/wellbeing', label: 'Bienestar', icon: <SpaOutlinedIcon fontSize="small" /> },
   { value: '/community', label: 'Comunidad', icon: <GroupsOutlinedIcon fontSize="small" /> },
   { value: '/profile', label: 'Perfil', icon: <PersonOutlineOutlinedIcon fontSize="small" /> },

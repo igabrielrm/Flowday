@@ -9,6 +9,7 @@ import {
   Chip,
   Divider,
   IconButton,
+  Paper,
   Stack,
   Typography,
   useTheme,
@@ -16,6 +17,7 @@ import {
 import ChevronLeftIcon from '@mui/icons-material/ChevronLeft';
 import ChevronRightIcon from '@mui/icons-material/ChevronRight';
 import WarningAmberIcon from '@mui/icons-material/WarningAmber';
+import NoteAltOutlinedIcon from '@mui/icons-material/NoteAltOutlined';
 import { api } from '../api/client';
 import { OFFLINE_QUEUE_EVENT } from '../events';
 import { readApiGet } from '../offline/cache';
@@ -27,6 +29,8 @@ import { glassButton, glassSurface } from '../theme/glass';
 import type { ActividadListItem, PriorityAlert } from '../types/activity';
 import { estadoLabel, formatDate, tipoLabel } from '../types/activity';
 import type { ScheduleAlert } from '../types/schedule';
+import type { Note } from '../types/note';
+import { NOTE_COLORS } from '../types/note';
 import { localDateIso, shiftLocalDateIso } from '../utils/localDate';
 
 function todayIso() {
@@ -51,6 +55,7 @@ export default function DashboardPage() {
   const [dayItems, setDayItems] = useState<ActividadListItem[]>([]);
   const [alerts, setAlerts] = useState<PriorityAlert[]>([]);
   const [scheduleAlert, setScheduleAlert] = useState<ScheduleAlert | null>(null);
+  const [recentNote, setRecentNote] = useState<Note | null>(null);
   const [loading, setLoading] = useState(true);
   const [detailId, setDetailId] = useState<number | null>(null);
   const [rescheduleOpen, setRescheduleOpen] = useState(false);
@@ -64,16 +69,24 @@ export default function DashboardPage() {
     // Load from cache first for instant UI
     const cachedDay = readApiGet<ActividadListItem[]>(`/api/v1/activities/by-date?fecha=${viewDate}`);
     const cachedSched = readApiGet<ScheduleAlert>('/api/v1/schedule/alert');
+    const cachedNotes = readApiGet<Note[]>('/api/v1/notes');
     if (cachedDay) setDayItems(cachedDay);
     if (cachedSched) setScheduleAlert(cachedSched);
+    if (cachedNotes && cachedNotes.length > 0) {
+      setRecentNote(cachedNotes.sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())[0]);
+    }
     setLoading(false);
     // Then fetch from server in background
-    const [dayRes, schedRes] = await Promise.all([
+    const [dayRes, schedRes, notesRes] = await Promise.all([
       api.activities.byDate(viewDate),
       api.schedule.alert(),
+      api.notes.list(),
     ]);
     if (dayRes.ok && dayRes.data) setDayItems(dayRes.data);
     if (schedRes.ok) setScheduleAlert(schedRes.data as ScheduleAlert | null);
+    if (notesRes.ok && notesRes.data && notesRes.data.length > 0) {
+      setRecentNote(notesRes.data.sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())[0]);
+    }
   }, [viewDate]);
 
   useEffect(() => {
@@ -169,6 +182,52 @@ export default function DashboardPage() {
                 Ver horario
               </Button>
             </Stack>
+          </CardContent>
+        </Card>
+      )}
+
+      {recentNote && (
+        <Card sx={glassSurface(theme)}>
+          <CardContent>
+            <Stack direction="row" spacing={1.5} alignItems="center" mb={2}>
+              <NoteAltOutlinedIcon color="primary" />
+              <Typography variant="h6" fontWeight={700}>
+                Nota reciente
+              </Typography>
+            </Stack>
+            <Paper
+              elevation={0}
+              sx={{
+                p: 2,
+                borderRadius: 2,
+                bgcolor: NOTE_COLORS.find((c) => c.value === recentNote.color)?.bgLight ?? '#fff',
+                border: '1.5px solid',
+                borderColor: 'divider',
+                cursor: 'pointer',
+                '&:hover': { borderColor: 'primary.main' },
+              }}
+              component={RouterLink}
+              to="/notes"
+            >
+              {recentNote.titulo && (
+                <Typography variant="subtitle2" fontWeight={700} sx={{ mb: 0.5 }}>
+                  {recentNote.titulo}
+                </Typography>
+              )}
+              <Typography
+                variant="body2"
+                color="text.secondary"
+                sx={{
+                  display: '-webkit-box',
+                  WebkitLineClamp: 3,
+                  WebkitBoxOrient: 'vertical',
+                  overflow: 'hidden',
+                  whiteSpace: 'pre-wrap',
+                }}
+              >
+                {recentNote.contenido || <em style={{ opacity: 0.5 }}>Nota vacía</em>}
+              </Typography>
+            </Paper>
           </CardContent>
         </Card>
       )}

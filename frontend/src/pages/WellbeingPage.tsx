@@ -72,7 +72,11 @@ export default function WellbeingPage() {
       api.activities.list(),
     ]);
     if (statsRes.ok && statsRes.data) setStats(statsRes.data);
-    if (stressRes.ok && stressRes.data) setStress(stressRes.data);
+    if (stressRes.ok && stressRes.data) {
+      setStress(stressRes.data);
+    } else if (stressRes.error) {
+      console.error('Error loading stress data:', stressRes.error);
+    }
     if (actRes.ok && actRes.data) {
       setActivities(actRes.data.filter((a) => a.estado !== 'COMPLETADA'));
     }

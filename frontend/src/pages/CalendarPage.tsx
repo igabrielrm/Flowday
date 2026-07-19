@@ -27,12 +27,6 @@ import {
   monthLabel,
 } from '../types/calendar';
 
-const LEGEND = [
-  { label: 'Pendientes', bg: '#bfdbfe', color: '#1e3a5f' },
-  { label: 'Completadas', bg: '#bbf7d0', color: '#14532d' },
-  { label: 'Alta prioridad', bg: '#fecaca', color: '#7f1d1d' },
-  { label: 'Media prioridad', bg: '#fef08a', color: '#713f12' },
-] as const;
 
 export default function CalendarPage() {
   const theme = useTheme();
@@ -207,22 +201,9 @@ export default function CalendarPage() {
             })}
           </Box>
 
-          <Stack
-            direction={{ xs: 'column', sm: 'row' }}
-            sx={{ flexWrap: 'wrap', gap: { xs: 1.25, sm: 2 }, mt: 3, alignItems: { sm: 'center' } }}
-          >
-            {LEGEND.map((item) => (
-              <Chip
-                key={item.label}
-                size="small"
-                label={item.label}
-                sx={{ bgcolor: item.bg, color: item.color, fontWeight: 600, px: 0.5 }}
-              />
-            ))}
-            <Typography variant="caption" color="text.secondary" sx={{ px: 0.5, lineHeight: 1.5 }}>
-              Click en un día para ver actividades
-            </Typography>
-          </Stack>
+          <Typography variant="caption" color="text.secondary" sx={{ mt: 2, textAlign: 'center', display: 'block' }}>
+            Click en un día para ver actividades
+          </Typography>
         </CardContent>
       </Card>
 
