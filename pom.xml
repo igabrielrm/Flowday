@@ -12,10 +12,10 @@
         <relativePath/>
     </parent>
 
-    <groupId>com.uce</groupId>
-    <artifactId>servidorproyecto</artifactId>
+    <groupId>com.flowday</groupId>
+    <artifactId>flowday</artifactId>
     <version>0.0.1-SNAPSHOT</version>
-    <name>servidorproyecto</name>
+    <name>flowday</name>
     <description>Flowday — personal productivity platform</description>
 
     <properties>

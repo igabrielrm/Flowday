@@ -25,7 +25,7 @@ spring.thymeleaf.encoding=UTF-8
 spring.thymeleaf.mode=HTML
 
 logging.level.root=INFO
-logging.level.com.uce.servidorproyecto=DEBUG
+logging.level.com.flowday.flowday=DEBUG
 
 spring.servlet.multipart.max-file-size=5MB
 spring.servlet.multipart.max-request-size=5MB
@@ -66,7 +66,7 @@ mobile.auth.refresh-ttl=${MOBILE_REFRESH_TTL:30d}
 mobile.auth.issuer=${MOBILE_JWT_ISSUER:flowday-api}
 # Orígenes exactos separados por coma; nunca usar "*" con credenciales.
 mobile.auth.allowed-origins=${MOBILE_ALLOWED_ORIGINS:https://localhost,capacitor://localhost,http://localhost:5173}
-mobile.auth.oauth-callback=${MOBILE_OAUTH_CALLBACK:com.uce.flowday://auth/callback}
+mobile.auth.oauth-callback=${MOBILE_OAUTH_CALLBACK:com.flowday.flowday://auth/callback}
 # OAuth móvil futuro: usar authorization-code + PKCE y un callback/deep-link dedicado.
 # No reutilizar /login/oauth2/**, que conserva la sesión/cookie del flujo web.
 
